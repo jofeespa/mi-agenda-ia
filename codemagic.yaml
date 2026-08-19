@@ -1,0 +1,31 @@
+workflows:
+  android-debug:
+    name: Mi Agenda IA 0.1 - APK de prueba
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      flutter: stable
+    scripts:
+      - name: Mostrar versiones
+        script: |
+          flutter --version
+          java -version
+      - name: Generar y preparar Android
+        script: |
+          python3 tool/prepare_android.py
+      - name: Descargar dependencias
+        script: |
+          flutter pub get
+      - name: Analizar código
+        script: |
+          flutter analyze
+      - name: Ejecutar pruebas
+        script: |
+          flutter test
+      - name: Crear APK instalable
+        script: |
+          flutter build apk --debug
+          cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.apk
+    artifacts:
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.apk
+      - build/app/outputs/flutter-apk/app-debug.apk
