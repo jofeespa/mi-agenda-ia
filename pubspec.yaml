@@ -1,5 +1,5 @@
 name: mi_agenda_ia
-description: Agenda personal por voz: notas, tareas, recordatorios y calendario.
+description: "Agenda personal por voz: notas, tareas, recordatorios y calendario."
 publish_to: 'none'
 version: 0.1.0+1
 
