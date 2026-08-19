@@ -257,6 +257,14 @@ def main() -> None:
         ".",
     )
 
+    # flutter create puede añadir el test de plantilla que referencia `MyApp`.
+    # Nuestra aplicación usa `MiAgendaIAApp`, por lo que eliminamos únicamente
+    # ese archivo generado por Flutter antes de analizar/probar el proyecto.
+    generated_widget_test = ROOT / "test" / "widget_test.dart"
+    if generated_widget_test.exists():
+        generated_widget_test.unlink()
+        print("Eliminado test/widget_test.dart generado por Flutter.", flush=True)
+
     manifest = ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
     if not manifest.exists():
         raise RuntimeError("Flutter no generó AndroidManifest.xml.")

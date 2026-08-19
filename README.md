@@ -1,4 +1,4 @@
-# Mi Agenda IA — versión 0.1.4
+# Mi Agenda IA — versión 0.1.5
 
 Versión de validación Android de una agenda personal controlada por voz o texto.
 
@@ -21,7 +21,7 @@ Se revisaron de forma integral:
 - El análisis no falla por avisos informativos (`--no-fatal-infos`), pero sí
   continúa bloqueando errores y advertencias reales.
 
-## Qué hace la versión 0.1.4
+## Qué hace la versión 0.1.5
 
 - Pantalla principal azul.
 - Botón grande para hablar.
@@ -34,7 +34,7 @@ Se revisaron de forma integral:
 
 ## Build
 
-El workflow `Mi Agenda IA 0.1.4 - APK auditado` ejecuta:
+El workflow `Mi Agenda IA 0.1.5 - APK auditado` ejecuta:
 
 1. Validación de estructura y YAML.
 2. Generación/validación Android.
@@ -46,7 +46,7 @@ El workflow `Mi Agenda IA 0.1.4 - APK auditado` ejecuta:
 
 El artefacto esperado es:
 
-`Mi-Agenda-IA-0.1.4.apk`
+`Mi-Agenda-IA-0.1.5.apk`
 
 
 ## Corrección 0.1.3
@@ -61,3 +61,15 @@ Flutter.
 
 - Eliminado un carácter `\\` accidental al inicio de `intent_parser.dart`.
 - El paso de formato ahora aplica `dart format` en vez de fallar por cambios de estilo.
+
+## Corrección 0.1.5
+
+Se corrigieron los dos errores exactos de la compilación #7:
+
+1. `NavigationBar` no tiene constructor `const` en Flutter, por lo que se
+   eliminó `const` de `bottomNavigationBar`.
+2. `flutter create` estaba generando `test/widget_test.dart`, el test de
+   plantilla que intenta construir `MyApp`. El script de preparación ahora
+   elimina ese archivo generado antes de `flutter analyze` y `flutter test`.
+
+El test propio `test/intent_parser_test.dart` se conserva.
