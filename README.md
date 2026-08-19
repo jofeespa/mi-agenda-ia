@@ -1,41 +1,32 @@
-# Mi Agenda IA — versión 0.1
+# Mi Agenda IA — versión 0.1.1
 
-Primera versión de prueba para Android de una agenda personal controlada principalmente por voz.
+Versión de prueba Android de una agenda personal controlada principalmente por voz.
 
-## Qué incluye esta versión
+## Qué cambia respecto de 0.1
 
-- Interfaz principal en tonos azules.
-- Botón central de micrófono.
-- Reconocimiento de voz en español de Ecuador (`es_EC`).
-- Clasificación local de órdenes como nota, tarea, recordatorio o evento.
-- Interpretación básica de expresiones como `hoy`, `mañana`, días de la semana y horas.
-- Confirmación antes de guardar lo interpretado.
-- Corrección manual de tipo, fecha y hora.
-- Almacenamiento local de los elementos.
-- Notificaciones locales para tareas, recordatorios y eventos con fecha/hora.
-- Entrada escrita manteniendo presionado el botón del micrófono.
+- Codemagic usa `mac_mini_m2`.
+- Android se genera **dentro del propio proyecto**, no en una carpeta temporal.
+- `flutter create` se ejecuta con `--no-pub` para evitar una resolución de dependencias innecesaria.
+- Después se aplican permisos de micrófono, notificaciones y ajustes de Android.
+- La compilación genera `Mi-Agenda-IA-0.1.1.apk`.
 
-## Ejemplos para probar
+## Flujo de compilación
 
-- `Anota una idea para mi tesis.`
-- `Recuérdame llamar a Juan mañana a las 9.`
-- `Tengo que entregar el informe viernes a las 4 de la tarde.`
-- `Agenda reunión con el director el jueves a las 3 de la tarde.`
+1. Mostrar versiones de Flutter y Java.
+2. Generar la plataforma Android.
+3. Descargar dependencias.
+4. Ejecutar `flutter analyze`.
+5. Ejecutar pruebas.
+6. Compilar APK debug instalable.
 
-## Compilación en Codemagic
+## Funciones de esta prueba
 
-El repositorio incluye `codemagic.yaml`. El flujo `android-debug` hace lo siguiente automáticamente:
+- Inicio en tonos azules.
+- Botón principal de voz.
+- Entrada manual como alternativa.
+- Clasificación de texto en Nota, Tarea, Recordatorio o Evento.
+- Confirmación antes de guardar.
+- Persistencia local.
+- Notificaciones locales para elementos con fecha y hora.
 
-1. Usa Flutter estable en la nube.
-2. Genera el host Android compatible con esa versión de Flutter.
-3. Añade los permisos de micrófono, reconocimiento de voz y notificaciones.
-4. Configura Android para notificaciones programadas.
-5. Ejecuta `flutter pub get`.
-6. Ejecuta `flutter analyze` y `flutter test`.
-7. Genera `Mi-Agenda-IA-0.1.apk`.
-
-La carpeta `android/` se genera durante la compilación. Esto es intencional: evita guardar una plantilla Gradle que pueda quedar desactualizada respecto a la versión de Flutter disponible en Codemagic.
-
-## Alcance de 0.1
-
-Esta versión usa reglas locales simples para interpretar las frases; todavía no integra un modelo de IA remoto. El objetivo es validar primero el flujo real en tu teléfono: abrir, hablar, interpretar, confirmar, guardar y recibir una notificación.
+Esta es una versión MVP de validación; aún no representa la aplicación completa.
