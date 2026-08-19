@@ -1,86 +1,76 @@
 workflows:
   android-debug:
-    name: Mi Agenda IA 0.1.2 - APK auditado
+    name: Mi Agenda IA 0.1.3 - APK auditado
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
       flutter: 3.38.1
+
     scripts:
       - name: Mostrar versiones
         script: |
-          set -e
+          set -euo pipefail
           flutter --version
+          dart --version
           java -version
           python3 --version
 
-      - name: Validar archivos base
+      - name: Validar estructura base
         script: |
-          set -e
-          python3 - <<'PY'
-          from pathlib import Path
-          import yaml
+          set -euo pipefail
+          for f in             pubspec.yaml             analysis_options.yaml             lib/main.dart             lib/models/agenda_item.dart             lib/screens/home_screen.dart             lib/services/intent_parser.dart             lib/services/notification_service.dart             lib/services/storage_service.dart             lib/widgets/item_card.dart             test/intent_parser_test.dart             tool/prepare_android.py
+          do
+            test -f "$f" || { echo "Falta archivo requerido: $f"; exit 1; }
+          done
 
-          required = [
-              "pubspec.yaml",
-              "analysis_options.yaml",
-              "lib/main.dart",
-              "lib/screens/home_screen.dart",
-              "lib/services/intent_parser.dart",
-              "lib/services/notification_service.dart",
-              "lib/services/storage_service.dart",
-              "test/intent_parser_test.dart",
-              "tool/prepare_android.py",
-          ]
-
-          missing = [path for path in required if not Path(path).is_file()]
-          if missing:
-              raise SystemExit(f"Faltan archivos: {missing}")
-
-          yaml.safe_load(Path("pubspec.yaml").read_text())
-          yaml.safe_load(Path("codemagic.yaml").read_text())
-          print("Archivos YAML y estructura base: OK")
-          PY
+          grep -q '^name: mi_agenda_ia$' pubspec.yaml
+          grep -q '^version: 0.1.3+4$' pubspec.yaml
+          grep -q '^description: "Agenda personal por voz:' pubspec.yaml
+          python3 -m py_compile tool/prepare_android.py
+          echo "Estructura base: OK"
 
       - name: Generar y validar Android
         script: |
-          set -e
-          python3 -m py_compile tool/prepare_android.py
+          set -euo pipefail
           python3 tool/prepare_android.py
+
           test -f android/app/src/main/AndroidManifest.xml
           test -f android/gradle/wrapper/gradle-wrapper.properties
-          grep -q "android.permission.RECORD_AUDIO" android/app/src/main/AndroidManifest.xml
-          grep -q "ScheduledNotificationReceiver" android/app/src/main/AndroidManifest.xml
-          grep -q "gradle-8.13-bin.zip" android/gradle/wrapper/gradle-wrapper.properties
+
+          grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.POST_NOTIFICATIONS' android/app/src/main/AndroidManifest.xml
+          grep -q 'ScheduledNotificationReceiver' android/app/src/main/AndroidManifest.xml
+          grep -q 'gradle-8.13-bin.zip' android/gradle/wrapper/gradle-wrapper.properties
           echo "Android: OK"
 
-      - name: Descargar dependencias
+      - name: Resolver dependencias
         script: |
-          set -e
+          set -euo pipefail
           flutter pub get
           flutter pub deps --style=compact
 
       - name: Verificar formato
         script: |
-          set -e
+          set -euo pipefail
           dart format --output=none --set-exit-if-changed lib test
 
       - name: Analizar código
         script: |
-          set -e
+          set -euo pipefail
           flutter analyze --no-fatal-infos
 
       - name: Ejecutar pruebas
         script: |
-          set -e
+          set -euo pipefail
           flutter test
 
       - name: Crear APK instalable
         script: |
-          set -e
+          set -euo pipefail
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.2.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.3.apk
 
     artifacts:
-      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.2.apk
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.3.apk
       - build/app/outputs/flutter-apk/app-debug.apk
