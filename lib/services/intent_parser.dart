@@ -1,4 +1,3 @@
-\
 import '../models/agenda_item.dart';
 
 class ParsedIntent {

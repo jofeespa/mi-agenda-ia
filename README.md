@@ -1,4 +1,4 @@
-# Mi Agenda IA — versión 0.1.3
+# Mi Agenda IA — versión 0.1.4
 
 Versión de validación Android de una agenda personal controlada por voz o texto.
 
@@ -21,7 +21,7 @@ Se revisaron de forma integral:
 - El análisis no falla por avisos informativos (`--no-fatal-infos`), pero sí
   continúa bloqueando errores y advertencias reales.
 
-## Qué hace la versión 0.1.3
+## Qué hace la versión 0.1.4
 
 - Pantalla principal azul.
 - Botón grande para hablar.
@@ -34,7 +34,7 @@ Se revisaron de forma integral:
 
 ## Build
 
-El workflow `Mi Agenda IA 0.1.3 - APK auditado` ejecuta:
+El workflow `Mi Agenda IA 0.1.4 - APK auditado` ejecuta:
 
 1. Validación de estructura y YAML.
 2. Generación/validación Android.
@@ -46,7 +46,7 @@ El workflow `Mi Agenda IA 0.1.3 - APK auditado` ejecuta:
 
 El artefacto esperado es:
 
-`Mi-Agenda-IA-0.1.3.apk`
+`Mi-Agenda-IA-0.1.4.apk`
 
 
 ## Corrección 0.1.3
@@ -55,3 +55,9 @@ La validación previa de Codemagic ya no importa `yaml`/PyYAML ni ninguna
 librería Python externa. Solo usa shell, `grep`, `test` y la biblioteca
 estándar de Python. Esto evita fallos del entorno de CI antes de ejecutar
 Flutter.
+
+
+## Corrección 0.1.4
+
+- Eliminado un carácter `\\` accidental al inicio de `intent_parser.dart`.
+- El paso de formato ahora aplica `dart format` en vez de fallar por cambios de estilo.

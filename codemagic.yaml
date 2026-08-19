@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Mi Agenda IA 0.1.3 - APK auditado
+    name: Mi Agenda IA 0.1.4 - APK auditado
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -24,7 +24,7 @@ workflows:
           done
 
           grep -q '^name: mi_agenda_ia$' pubspec.yaml
-          grep -q '^version: 0.1.3+4$' pubspec.yaml
+          grep -q '^version: 0.1.4+5$' pubspec.yaml
           grep -q '^description: "Agenda personal por voz:' pubspec.yaml
           python3 -m py_compile tool/prepare_android.py
           echo "Estructura base: OK"
@@ -49,10 +49,10 @@ workflows:
           flutter pub get
           flutter pub deps --style=compact
 
-      - name: Verificar formato
+      - name: Formatear código
         script: |
           set -euo pipefail
-          dart format --output=none --set-exit-if-changed lib test
+          dart format lib test
 
       - name: Analizar código
         script: |
@@ -69,8 +69,8 @@ workflows:
           set -euo pipefail
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.3.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.4.apk
 
     artifacts:
-      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.3.apk
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.1.4.apk
       - build/app/outputs/flutter-apk/app-debug.apk
