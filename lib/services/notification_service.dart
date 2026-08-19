@@ -22,7 +22,7 @@ class NotificationService {
       final current = await FlutterTimezone.getLocalTimezone();
       tz.setLocalLocation(tz.getLocation(current.identifier));
     } on Exception {
-      // Si el dispositivo no entrega una zona válida, timezone usa UTC.
+      // timezone mantiene UTC si el dispositivo no entrega una zona válida.
     }
 
     const androidSettings =
@@ -38,24 +38,24 @@ class NotificationService {
     _initialized = true;
   }
 
+  Future<void> cancel(String itemId) async {
+    await init();
+    await _plugin.cancel(id: _notificationId(itemId));
+  }
+
   Future<void> schedule(AgendaItem item) async {
     final dateTime = item.dateTime;
-    if (dateTime == null || !dateTime.isAfter(DateTime.now())) {
+    if (item.type == AgendaItemType.note ||
+        dateTime == null ||
+        !dateTime.isAfter(DateTime.now())) {
       return;
     }
 
     await init();
+    await cancel(item.id);
 
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        'agenda_reminders',
-        'Recordatorios',
-        channelDescription:
-            'Avisos de tareas y recordatorios de Mi Agenda IA',
-        importance: Importance.max,
-        priority: Priority.high,
-      ),
-    );
+    final androidDetails = _androidDetails(item.alertMode);
+    final details = NotificationDetails(android: androidDetails);
 
     await _plugin.zonedSchedule(
       id: _notificationId(item.id),
@@ -68,8 +68,53 @@ class NotificationService {
     );
   }
 
+  AndroidNotificationDetails _androidDetails(AlertMode mode) {
+    switch (mode) {
+      case AlertMode.normal:
+        return const AndroidNotificationDetails(
+          'agenda_normal_v2',
+          'Avisos normales',
+          channelDescription: 'Sonido y vibración para Mi Agenda IA',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+        );
+      case AlertMode.strong:
+        return const AndroidNotificationDetails(
+          'agenda_fuerte_v2',
+          'Avisos fuertes',
+          channelDescription: 'Avisos prioritarios con sonido y vibración',
+          importance: Importance.max,
+          priority: Priority.max,
+          playSound: true,
+          enableVibration: true,
+          ticker: 'Mi Agenda IA',
+        );
+      case AlertMode.vibration:
+        return const AndroidNotificationDetails(
+          'agenda_vibracion_v2',
+          'Solo vibración',
+          channelDescription: 'Avisos sin sonido, con vibración',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: false,
+          enableVibration: true,
+        );
+      case AlertMode.silent:
+        return const AndroidNotificationDetails(
+          'agenda_silencioso_v2',
+          'Avisos silenciosos',
+          channelDescription: 'Avisos visuales sin sonido ni vibración',
+          importance: Importance.defaultImportance,
+          priority: Priority.defaultPriority,
+          playSound: false,
+          enableVibration: false,
+        );
+    }
+  }
+
   int _notificationId(String source) {
-    // FNV-1a de 32 bits: estable entre ejecuciones y positivo para Android.
     var hash = 0x811C9DC5;
     for (final unit in source.codeUnits) {
       hash ^= unit;
@@ -82,6 +127,6 @@ class NotificationService {
         AgendaItemType.note => 'Nota',
         AgendaItemType.task => 'Tarea pendiente',
         AgendaItemType.reminder => 'Recordatorio',
-        AgendaItemType.event => 'Evento de agenda',
+        AgendaItemType.event => 'Evento de calendario',
       };
 }

@@ -6,11 +6,11 @@ class ItemCard extends StatelessWidget {
   const ItemCard({
     super.key,
     required this.item,
-    this.onTap,
+    required this.onTap,
   });
 
   final AgendaItem item;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +18,7 @@ class ItemCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      color: const Color(0xFFF7F9FD),
+      color: const Color(0xFFF6F8FC),
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         onTap: onTap,
@@ -31,15 +31,27 @@ class ItemCard extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        subtitle: item.dateTime == null
-            ? Text(data.$3)
-            : Text('${data.$3} · ${_format(item.dateTime!)}'),
-        trailing: item.completed
-            ? const Icon(
-                Icons.check_circle,
-                color: Color(0xFF0B66E4),
-              )
-            : const Icon(Icons.chevron_right),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              item.dateTime == null
+                  ? data.$3
+                  : '${data.$3} · ${_format(item.dateTime!)}',
+            ),
+            if (item.type == AgendaItemType.task) ...[
+              const SizedBox(height: 5),
+              LinearProgressIndicator(
+                value: item.progress / 100,
+                minHeight: 5,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              const SizedBox(height: 3),
+              Text('${item.progress}% de avance'),
+            ],
+          ],
+        ),
+        trailing: const Icon(Icons.edit_outlined),
       ),
     );
   }
@@ -69,20 +81,9 @@ class ItemCard extends StatelessWidget {
 
   String _format(DateTime dateTime) {
     const months = <String>[
-      'ene',
-      'feb',
-      'mar',
-      'abr',
-      'may',
-      'jun',
-      'jul',
-      'ago',
-      'sep',
-      'oct',
-      'nov',
-      'dic',
+      'ene', 'feb', 'mar', 'abr', 'may', 'jun',
+      'jul', 'ago', 'sep', 'oct', 'nov', 'dic',
     ];
-
     final hour = dateTime.hour.toString().padLeft(2, '0');
     final minute = dateTime.minute.toString().padLeft(2, '0');
     return '${dateTime.day} ${months[dateTime.month - 1]}, $hour:$minute';
