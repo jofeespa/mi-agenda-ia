@@ -4,10 +4,24 @@ import 'package:mi_agenda_ia/services/intent_parser.dart';
 
 void main() {
   final parser = IntentParser();
-  final reference = DateTime(2026, 8, 19, 10, 0);
+  final reference = DateTime(2026, 8, 19, 10);
 
   test('clasifica una nota sin fecha', () {
-    final result = parser.parse('Anota una idea para mi tesis', now: reference);
+    final result = parser.parse(
+      'Anota una idea para mi tesis',
+      now: reference,
+    );
+
+    expect(result.type, AgendaItemType.note);
+    expect(result.dateTime, isNull);
+  });
+
+  test('un número en una nota no se interpreta como hora', () {
+    final result = parser.parse(
+      'Anota leer el capítulo 5',
+      now: reference,
+    );
+
     expect(result.type, AgendaItemType.note);
     expect(result.dateTime, isNull);
   });
@@ -17,6 +31,7 @@ void main() {
       'Recuérdame llamar a Juan mañana a las 9',
       now: reference,
     );
+
     expect(result.type, AgendaItemType.reminder);
     expect(result.dateTime, DateTime(2026, 8, 20, 9));
   });
@@ -26,6 +41,7 @@ void main() {
       'Agenda reunión con el director el jueves a las 3 de la tarde',
       now: reference,
     );
+
     expect(result.type, AgendaItemType.event);
     expect(result.dateTime, DateTime(2026, 8, 20, 15));
   });
@@ -35,7 +51,28 @@ void main() {
       'Tengo que entregar el informe viernes a las 4 de la tarde',
       now: reference,
     );
+
     expect(result.type, AgendaItemType.task);
     expect(result.dateTime, DateTime(2026, 8, 21, 16));
+  });
+
+  test('acepta hora con minutos', () {
+    final result = parser.parse(
+      'Recuérdame tomar la medicina mañana a las 8:30',
+      now: reference,
+    );
+
+    expect(result.type, AgendaItemType.reminder);
+    expect(result.dateTime, DateTime(2026, 8, 20, 8, 30));
+  });
+
+  test('una hora ya pasada sin día se mueve a mañana', () {
+    final result = parser.parse(
+      'Recuérdame llamar a las 8',
+      now: reference,
+    );
+
+    expect(result.type, AgendaItemType.reminder);
+    expect(result.dateTime, DateTime(2026, 8, 20, 8));
   });
 }

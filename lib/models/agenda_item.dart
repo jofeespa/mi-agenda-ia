@@ -3,14 +3,6 @@ import 'dart:convert';
 enum AgendaItemType { note, task, reminder, event }
 
 class AgendaItem {
-  final String id;
-  final AgendaItemType type;
-  final String title;
-  final String rawText;
-  final DateTime? dateTime;
-  final bool completed;
-  final DateTime createdAt;
-
   const AgendaItem({
     required this.id,
     required this.type,
@@ -20,6 +12,14 @@ class AgendaItem {
     this.dateTime,
     this.completed = false,
   });
+
+  final String id;
+  final AgendaItemType type;
+  final String title;
+  final String rawText;
+  final DateTime? dateTime;
+  final bool completed;
+  final DateTime createdAt;
 
   AgendaItem copyWith({bool? completed}) => AgendaItem(
         id: id,
@@ -31,7 +31,7 @@ class AgendaItem {
         completed: completed ?? this.completed,
       );
 
-  Map<String, dynamic> toMap() => {
+  Map<String, dynamic> toMap() => <String, dynamic>{
         'id': id,
         'type': type.name,
         'title': title,
@@ -54,6 +54,7 @@ class AgendaItem {
       );
 
   String toJson() => jsonEncode(toMap());
+
   factory AgendaItem.fromJson(String source) =>
       AgendaItem.fromMap(jsonDecode(source) as Map<String, dynamic>);
 }

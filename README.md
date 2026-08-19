@@ -1,32 +1,49 @@
-# Mi Agenda IA — versión 0.1.1
+# Mi Agenda IA — versión 0.1.2
 
-Versión de prueba Android de una agenda personal controlada principalmente por voz.
+Versión de validación Android de una agenda personal controlada por voz o texto.
 
-## Qué cambia respecto de 0.1
+## Auditoría realizada antes de esta entrega
 
-- Codemagic usa `mac_mini_m2`.
-- Android se genera **dentro del propio proyecto**, no en una carpeta temporal.
-- `flutter create` se ejecuta con `--no-pub` para evitar una resolución de dependencias innecesaria.
-- Después se aplican permisos de micrófono, notificaciones y ajustes de Android.
-- La compilación genera `Mi-Agenda-IA-0.1.1.apk`.
+Se revisaron de forma integral:
 
-## Flujo de compilación
+- `pubspec.yaml` y compatibilidad de dependencias.
+- Uso actual de `speech_to_text` 7.4.0.
+- Uso actual de `flutter_local_notifications` 22.3.0.
+- Migración de almacenamiento a `SharedPreferencesAsync`.
+- Inicialización del reconocimiento de voz una sola vez.
+- Selección segura de español disponible en el dispositivo.
+- Clasificador Nota / Tarea / Recordatorio / Calendario.
+- Pruebas del parser, incluyendo números que no deben convertirse en horas.
+- Permisos Android de micrófono y reconocimiento de voz.
+- Configuración Android para notificaciones programadas.
+- Desugaring, Java 17, compileSdk 36, minSdk 24, AGP 8.11.1 y Gradle 8.13.
+- Flujo de Codemagic con Flutter 3.38.1 fijado para evitar cambios de versión.
+- El análisis no falla por avisos informativos (`--no-fatal-infos`), pero sí
+  continúa bloqueando errores y advertencias reales.
 
-1. Mostrar versiones de Flutter y Java.
-2. Generar la plataforma Android.
-3. Descargar dependencias.
-4. Ejecutar `flutter analyze`.
-5. Ejecutar pruebas.
-6. Compilar APK debug instalable.
+## Qué hace la versión 0.1.2
 
-## Funciones de esta prueba
+- Pantalla principal azul.
+- Botón grande para hablar.
+- Entrada manual manteniendo pulsado el botón.
+- Convierte voz a texto mediante las capacidades del dispositivo.
+- Interpreta Nota, Tarea, Recordatorio o Evento.
+- Permite confirmar/corregir el tipo y la fecha antes de guardar.
+- Guarda elementos localmente.
+- Programa notificaciones locales cuando hay fecha y hora.
 
-- Inicio en tonos azules.
-- Botón principal de voz.
-- Entrada manual como alternativa.
-- Clasificación de texto en Nota, Tarea, Recordatorio o Evento.
-- Confirmación antes de guardar.
-- Persistencia local.
-- Notificaciones locales para elementos con fecha y hora.
+## Build
 
-Esta es una versión MVP de validación; aún no representa la aplicación completa.
+El workflow `Mi Agenda IA 0.1.2 - APK auditado` ejecuta:
+
+1. Validación de estructura y YAML.
+2. Generación/validación Android.
+3. `flutter pub get`.
+4. Verificación de formato.
+5. `flutter analyze --no-fatal-infos`.
+6. `flutter test`.
+7. `flutter build apk --debug`.
+
+El artefacto esperado es:
+
+`Mi-Agenda-IA-0.1.2.apk`

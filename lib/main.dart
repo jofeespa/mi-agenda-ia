@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'screens/home_screen.dart';
 
 void main() {
@@ -15,6 +16,7 @@ class MiAgendaIAApp extends StatelessWidget {
       seedColor: const Color(0xFF075FE4),
       brightness: Brightness.light,
     );
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Mi Agenda IA',
@@ -25,10 +27,14 @@ class MiAgendaIAApp extends StatelessWidget {
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
             backgroundColor: const Color(0xFF075FE4),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
-        navigationBarTheme: const NavigationBarThemeData(indicatorColor: Color(0xFFDCEAFF)),
+        navigationBarTheme: const NavigationBarThemeData(
+          indicatorColor: Color(0xFFDCEAFF),
+        ),
       ),
       home: const HomeScreen(),
     );
