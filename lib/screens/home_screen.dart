@@ -31,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<AgendaItem> _items = <AgendaItem>[];
   AppSettings _settings = const AppSettings();
   bool _listening = false;
-  bool _startingListening = false;
+  bool _speechSubmissionStarted = false;
   bool _speechReady = false;
   String? _speechLocaleId;
   String _heard = '';
@@ -275,15 +275,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startListening() async {
-    if (_startingListening || _listening) return;
     if (!_speechReady) {
       _showTypedFallback();
       return;
     }
 
-    _startingListening = true;
     setState(() {
       _listening = true;
+      _speechSubmissionStarted = false;
       _heard = '';
     });
 
@@ -303,9 +302,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           setState(() => _heard = recognized);
 
           if (result.finalResult && recognized.isNotEmpty) {
-            unawaited(_speech.stop());
-            setState(() => _listening = false);
-            unawaited(_createFromText(recognized));
+            unawaited(_submitSpeechOnce(recognized));
           }
         },
       );
@@ -314,20 +311,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() => _listening = false);
         _showTypedFallback();
       }
-    } finally {
-      _startingListening = false;
     }
   }
 
   Future<void> _stopListening() async {
+    await _submitSpeechOnce(_heard);
+  }
+
+  Future<void> _submitSpeechOnce(String rawText) async {
+    final text = rawText.trim();
+    if (_speechSubmissionStarted || text.isEmpty) return;
+
+    _speechSubmissionStarted = true;
     await _speech.stop();
     if (!mounted) return;
 
     setState(() => _listening = false);
-    final text = _heard.trim();
-    if (text.isNotEmpty) {
-      await _createFromText(text);
-    }
+    await _createFromText(text);
   }
 
   void _showTypedFallback() {

@@ -31,7 +31,7 @@ workflows:
           test -f tool/prepare_android.py
 
           grep -q '^name: mi_agenda_ia$' pubspec.yaml
-          grep -q '^version: 0.4.2+15$' pubspec.yaml
+          grep -q '^version: 0.4.3+16$' pubspec.yaml
           grep -q '^description: "Agenda personal por voz:' pubspec.yaml
           python3 -m py_compile tool/prepare_android.py
           echo "Estructura base: OK"

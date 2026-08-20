@@ -1,4 +1,11 @@
-# Mi Agenda IA — versión 0.4.0
+# Mi Agenda IA — versión 0.4.3
+
+## Correcciones de la versión 0.4.3
+
+- Evita que un mismo dictado cree dos actividades.
+- Comprueba los permisos ya concedidos antes de abrir los ajustes de Android.
+- La autorización de pantalla completa no vuelve a solicitarse cuando ya está
+  habilitada.
 
 La 0.4 convierte los avisos en una experiencia tipo despertador.
 
@@ -48,7 +55,7 @@ de notificación, alarmas exactas y pantalla completa. La app expone
 `Perfil > Permisos de alarmas` para abrir esas autorizaciones.
 
 Workflow Codemagic:
-`Mi Agenda IA 0.4.0 - APK de prueba`
+`Mi Agenda IA 0.4.3 - APK de prueba`
 
 APK:
-`Mi-Agenda-IA-0.4.0.apk`
+`Mi-Agenda-IA-0.4.3.apk`
