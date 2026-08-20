@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Mi Agenda IA 0.4.1 - APK de prueba
+    name: Mi Agenda IA 0.4.2 - APK de prueba
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -18,14 +18,20 @@ workflows:
       - name: Validar estructura base
         script: |
           set -euo pipefail
-          for f in             pubspec.yaml             analysis_options.yaml             lib/main.dart             lib/models/agenda_item.dart
-             lib/models/app_settings.dart             lib/screens/home_screen.dart             lib/services/intent_parser.dart             lib/services/storage_service.dart             lib/widgets/item_card.dart             test/intent_parser_test.dart             tool/prepare_android.py
-          do
-            test -f "$f" || { echo "Falta archivo requerido: $f"; exit 1; }
-          done
+          test -f pubspec.yaml
+          test -f analysis_options.yaml
+          test -f lib/main.dart
+          test -f lib/models/agenda_item.dart
+          test -f lib/models/app_settings.dart
+          test -f lib/screens/home_screen.dart
+          test -f lib/services/intent_parser.dart
+          test -f lib/services/storage_service.dart
+          test -f lib/widgets/item_card.dart
+          test -f test/intent_parser_test.dart
+          test -f tool/prepare_android.py
 
           grep -q '^name: mi_agenda_ia$' pubspec.yaml
-          grep -q '^version: 0.4.1+14$' pubspec.yaml
+          grep -q '^version: 0.4.2+15$' pubspec.yaml
           grep -q '^description: "Agenda personal por voz:' pubspec.yaml
           python3 -m py_compile tool/prepare_android.py
           echo "Estructura base: OK"
@@ -82,8 +88,8 @@ workflows:
           set -euo pipefail
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.1.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.2.apk
 
     artifacts:
-      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.1.apk
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.2.apk
       - build/app/outputs/flutter-apk/app-debug.apk
