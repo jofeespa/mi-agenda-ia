@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID = ROOT / "android"
+NATIVE = ROOT / "android_native"
 
 
 def run(*args: str) -> None:
@@ -39,6 +41,12 @@ def patch_manifest(path: Path) -> None:
         '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />',
         '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
         '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
+        '<uses-permission android:name="android.permission.VIBRATE" />',
+        '<uses-permission android:name="android.permission.WAKE_LOCK" />',
+        '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />',
+        '<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />',
+        '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+        '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />',
     ]
 
     manifest_close = text.find(">")
@@ -92,6 +100,15 @@ def patch_manifest(path: Path) -> None:
         count=1,
     )
 
+
+    native_components = """
+        <receiver android:name=".AlarmReceiver" android:exported="false" />
+        <receiver android:name=".AlarmActionReceiver" android:exported="false" />
+        <service android:name=".AlarmService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="mediaPlayback" />
+"""
+    if ".AlarmService" not in text:
+        text = text.replace("</application>", native_components + "    </application>", 1)
+    text = text.replace('<activity\n', '<activity\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"\n', 1)
     path.write_text(text, encoding="utf-8")
 
 
@@ -209,11 +226,11 @@ def patch_agp_version(path: Path) -> None:
     patterns = [
         (
             r'(id\("com\.android\.application"\)\s+version\s+")([^"]+)(")',
-            r"\g<1>8.11.1\g<3>",
+            r"\g<1>8.12.1\g<3>",
         ),
         (
             r"(id\s+'com\.android\.application'\s+version\s+')([^']+)(')",
-            r"\g<1>8.11.1\g<3>",
+            r"\g<1>8.12.1\g<3>",
         ),
     ]
 
@@ -244,6 +261,17 @@ def patch_gradle_wrapper(path: Path) -> None:
     path.write_text(updated, encoding="utf-8")
 
 
+
+def copy_native_android_files() -> None:
+    package_dir = ANDROID / "app" / "src" / "main" / "kotlin" / "com" / "miagendaia" / "mi_agenda_ia"
+    package_dir.mkdir(parents=True, exist_ok=True)
+    for source in (NATIVE / "kotlin").glob("*.kt"):
+        shutil.copy2(source, package_dir / source.name)
+    raw_dir = ANDROID / "app" / "src" / "main" / "res" / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    for source in (NATIVE / "res" / "raw").glob("*"):
+        shutil.copy2(source, raw_dir / source.name)
+
 def main() -> None:
     run(
         "flutter",
@@ -264,6 +292,8 @@ def main() -> None:
     if generated_widget_test.exists():
         generated_widget_test.unlink()
         print("Eliminado test/widget_test.dart generado por Flutter.", flush=True)
+
+    copy_native_android_files()
 
     manifest = ANDROID / "app" / "src" / "main" / "AndroidManifest.xml"
     if not manifest.exists():

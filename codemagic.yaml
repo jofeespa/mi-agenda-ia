@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Mi Agenda IA 0.2.0 - APK de prueba
+    name: Mi Agenda IA 0.3.0 - APK de prueba
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -24,7 +24,7 @@ workflows:
           done
 
           grep -q '^name: mi_agenda_ia$' pubspec.yaml
-          grep -q '^version: 0.2.0+7$' pubspec.yaml
+          grep -q '^version: 0.3.0+9$' pubspec.yaml
           grep -q '^description: "Agenda personal por voz:' pubspec.yaml
           python3 -m py_compile tool/prepare_android.py
           echo "Estructura base: OK"
@@ -42,6 +42,10 @@ workflows:
           grep -q 'ScheduledNotificationReceiver' android/app/src/main/AndroidManifest.xml
           grep -q 'gradle-8.13-bin.zip' android/gradle/wrapper/gradle-wrapper.properties
           test ! -f test/widget_test.dart || { echo "No debe existir test/widget_test.dart generado por Flutter"; exit 1; }
+          test -f android/app/src/main/kotlin/com/miagendaia/mi_agenda_ia/AlarmService.kt
+          test -f android/app/src/main/res/raw/alarm_tone.wav
+          grep -q 'android.permission.SCHEDULE_EXACT_ALARM' android/app/src/main/AndroidManifest.xml
+          grep -q 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' android/app/src/main/AndroidManifest.xml
           echo "Android: OK"
 
       - name: Resolver dependencias
@@ -70,8 +74,8 @@ workflows:
           set -euo pipefail
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.2.0.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.3.0.apk
 
     artifacts:
-      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.2.0.apk
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.3.0.apk
       - build/app/outputs/flutter-apk/app-debug.apk

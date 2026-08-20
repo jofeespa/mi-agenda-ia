@@ -1,60 +1,7 @@
-# Mi Agenda IA — versión 0.2.0
+# Mi Agenda IA — versión 0.3.0
 
-Versión de prueba con las observaciones recibidas después de instalar y usar la
-0.1.5 en un teléfono Android.
+Incluye alarmas persistentes con sonido propio en bucle y vibración repetida, acciones OK / Posponer 10 min / Reprogramar, historial, tareas al 100% archivadas, recordatorios/eventos atendidos archivados, recurrencias diarias/semanales/mensuales con fecha final y exportación de notas a TXT.
 
-## Cambios incluidos
+Workflow: `Mi Agenda IA 0.3.0 - APK de prueba`
 
-### Edición
-- Toca cualquier elemento para editarlo.
-- Se puede cambiar título, tipo, fecha/hora, alerta y progreso.
-- Se puede eliminar un elemento.
-- Al editar una actividad programada se cancela el aviso anterior y se programa
-  el nuevo.
-
-### Fecha y hora obligatorias
-- Tareas, recordatorios y eventos de calendario exigen fecha y hora antes de
-  guardar.
-- Las notas siguen sin fecha/hora.
-
-### Progreso de tareas
-- Las tareas tienen avance de 0 a 100 %.
-- El progreso se muestra directamente en la tarjeta.
-- 100 % marca la tarea como completada.
-
-### Clasificación
-- Inicio incluye filtros: Todos, Tareas y Recordatorios.
-- Calendario muestra únicamente eventos.
-- Notas muestra únicamente notas.
-
-### Navegación
-- Los botones inferiores Inicio / Calendario / Notas / Perfil funcionan mediante
-  navegación interna.
-
-### Nombre
-- La primera vez que abre la versión 0.2, la app pregunta el nombre.
-- El nombre queda guardado localmente y aparece en el saludo.
-- Se puede editar desde Perfil.
-
-### Avisos
-Para tareas, recordatorios y eventos se puede escoger:
-- Sonido + vibración
-- Aviso fuerte
-- Solo vibración
-- Sin sonido ni vibración
-
-Los avisos se programan como notificaciones locales de Android y no requieren
-abrir la app en el momento del recordatorio.
-
-## Compatibilidad con datos anteriores
-Los elementos guardados por la 0.1.5 se intentan conservar. Los campos nuevos
-(progreso y modo de alerta) reciben valores predeterminados.
-
-## Build
-Workflow esperado en Codemagic:
-
-`Mi Agenda IA 0.2.0 - APK de prueba`
-
-Artefacto esperado:
-
-`Mi-Agenda-IA-0.2.0.apk`
+APK: `Mi-Agenda-IA-0.3.0.apk`

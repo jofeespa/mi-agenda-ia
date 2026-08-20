@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 enum AgendaItemType { note, task, reminder, event }
-
-enum AlertMode { normal, strong, vibration, silent }
+enum AlertMode { soundAndVibration, strong, soundOnly, vibrationOnly, silent }
+enum RecurrenceType { none, daily, weekly, monthly }
 
 class AgendaItem {
   const AgendaItem({
@@ -15,7 +15,12 @@ class AgendaItem {
     this.dateTime,
     this.completed = false,
     this.progress = 0,
-    this.alertMode = AlertMode.normal,
+    this.alertMode = AlertMode.soundAndVibration,
+    this.recurrence = RecurrenceType.none,
+    this.weekdays = const <int>[],
+    this.recurrenceEnd,
+    this.archived = false,
+    this.archivedAt,
   });
 
   final String id;
@@ -26,6 +31,11 @@ class AgendaItem {
   final bool completed;
   final int progress;
   final AlertMode alertMode;
+  final RecurrenceType recurrence;
+  final List<int> weekdays;
+  final DateTime? recurrenceEnd;
+  final bool archived;
+  final DateTime? archivedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -38,52 +48,57 @@ class AgendaItem {
         'completed': completed,
         'progress': progress,
         'alertMode': alertMode.name,
+        'recurrence': recurrence.name,
+        'weekdays': weekdays,
+        'recurrenceEnd': recurrenceEnd?.toIso8601String(),
+        'archived': archived,
+        'archivedAt': archivedAt?.toIso8601String(),
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
       };
 
   factory AgendaItem.fromMap(Map<String, dynamic> map) {
     final createdAt = DateTime.parse(map['createdAt'] as String);
-
     AgendaItemType type;
-    try {
-      type = AgendaItemType.values.byName(map['type'] as String);
-    } on ArgumentError {
-      type = AgendaItemType.note;
-    }
+    try { type = AgendaItemType.values.byName(map['type'] as String); }
+    on ArgumentError { type = AgendaItemType.note; }
 
     AlertMode alertMode;
     try {
-      alertMode = AlertMode.values.byName(
-        map['alertMode'] as String? ?? AlertMode.normal.name,
-      );
-    } on ArgumentError {
-      alertMode = AlertMode.normal;
-    }
+      final raw = map['alertMode'] as String?;
+      if (raw == 'normal') alertMode = AlertMode.soundAndVibration;
+      else if (raw == 'vibration') alertMode = AlertMode.vibrationOnly;
+      else alertMode = AlertMode.values.byName(raw ?? AlertMode.soundAndVibration.name);
+    } on ArgumentError { alertMode = AlertMode.soundAndVibration; }
+
+    RecurrenceType recurrence;
+    try { recurrence = RecurrenceType.values.byName(map['recurrence'] as String? ?? RecurrenceType.none.name); }
+    on ArgumentError { recurrence = RecurrenceType.none; }
 
     final rawProgress = map['progress'];
     final progress = rawProgress is int ? rawProgress.clamp(0, 100) : 0;
+    final rawWeekdays = map['weekdays'];
+    final weekdays = rawWeekdays is List ? rawWeekdays.whereType<num>().map((e)=>e.toInt()).toList() : <int>[];
 
     return AgendaItem(
       id: map['id'] as String,
       type: type,
       title: map['title'] as String,
       rawText: map['rawText'] as String? ?? map['title'] as String,
-      dateTime: map['dateTime'] == null
-          ? null
-          : DateTime.parse(map['dateTime'] as String),
+      dateTime: map['dateTime'] == null ? null : DateTime.parse(map['dateTime'] as String),
       completed: map['completed'] as bool? ?? false,
       progress: progress,
       alertMode: alertMode,
+      recurrence: recurrence,
+      weekdays: weekdays,
+      recurrenceEnd: map['recurrenceEnd'] == null ? null : DateTime.parse(map['recurrenceEnd'] as String),
+      archived: map['archived'] as bool? ?? false,
+      archivedAt: map['archivedAt'] == null ? null : DateTime.parse(map['archivedAt'] as String),
       createdAt: createdAt,
-      updatedAt: map['updatedAt'] == null
-          ? createdAt
-          : DateTime.parse(map['updatedAt'] as String),
+      updatedAt: map['updatedAt'] == null ? createdAt : DateTime.parse(map['updatedAt'] as String),
     );
   }
 
   String toJson() => jsonEncode(toMap());
-
-  factory AgendaItem.fromJson(String source) =>
-      AgendaItem.fromMap(jsonDecode(source) as Map<String, dynamic>);
+  factory AgendaItem.fromJson(String source) => AgendaItem.fromMap(jsonDecode(source) as Map<String, dynamic>);
 }
