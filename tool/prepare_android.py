@@ -75,23 +75,6 @@ def patch_manifest(path: Path) -> None:
 """
         text = text[:application_pos] + queries + text[application_pos:]
 
-    if "ScheduledNotificationReceiver" not in text:
-        receivers = """\
-        <receiver
-            android:exported="false"
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
-        <receiver
-            android:exported="false"
-            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
-            </intent-filter>
-        </receiver>
-"""
-        text = text.replace("</application>", receivers + "    </application>", 1)
 
     text = re.sub(
         r'android:label="[^"]*"',
