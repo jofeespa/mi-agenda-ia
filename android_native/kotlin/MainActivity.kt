@@ -21,34 +21,55 @@ class MainActivity : FlutterActivity() {
     private var pendingRingtoneResult: MethodChannel.Result? = null
     private var previewRingtone: Ringtone? = null
 
-    override fun configureFlutterEngine(engine: FlutterEngine) {
-        super.configureFlutterEngine(engine)
+    override fun configureFlutterEngine(
+        flutterEngine: FlutterEngine,
+    ) {
+        super.configureFlutterEngine(flutterEngine)
 
         MethodChannel(
-            engine.dartExecutor.binaryMessenger,
+            flutterEngine.dartExecutor.binaryMessenger,
             channelName,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "scheduleAlarm" -> {
                     AlarmScheduler.schedule(
                         context = this,
-                        id = call.argument<String>("id") ?: "",
-                        title = call.argument<String>("title") ?: "Recordatorio",
-                        triggerAt = call.argument<Number>("timestamp")?.toLong() ?: 0L,
-                        alertMode = call.argument<String>("alertMode") ?: "soundAndVibration",
-                        ringtoneUri = call.argument<String>("ringtoneUri") ?: "",
-                        occurrenceKey = call.argument<String>("occurrenceKey") ?: "0",
+                        id =
+                            call.argument<String>("id") ?: "",
+                        title =
+                            call.argument<String>("title")
+                                ?: "Recordatorio",
+                        triggerAt =
+                            call.argument<Number>("timestamp")
+                                ?.toLong()
+                                ?: 0L,
+                        alertMode =
+                            call.argument<String>("alertMode")
+                                ?: "soundAndVibration",
+                        ringtoneUri =
+                            call.argument<String>("ringtoneUri")
+                                ?: "",
+                        occurrenceKey =
+                            call.argument<String>(
+                                "occurrenceKey",
+                            ) ?: "0",
                     )
                     result.success(null)
                 }
 
                 "cancelItem" -> {
-                    AlarmScheduler.cancelItem(this, call.argument<String>("id") ?: "")
+                    AlarmScheduler.cancelItem(
+                        this,
+                        call.argument<String>("id") ?: "",
+                    )
                     result.success(null)
                 }
 
-                "consumePendingAction" ->
-                    result.success(PendingAlarmActions.consume(this))
+                "consumePendingAction" -> {
+                    result.success(
+                        PendingAlarmActions.consume(this),
+                    )
+                }
 
                 "requestAlarmPermissions" -> {
                     requestAlarmPermissions()
@@ -57,20 +78,34 @@ class MainActivity : FlutterActivity() {
 
                 "pickRingtone" -> {
                     if (pendingRingtoneResult != null) {
-                        result.error("picker_busy", "Ya hay un selector de tonos abierto.", null)
+                        result.error(
+                            "picker_busy",
+                            "Ya hay un selector de tonos abierto.",
+                            null,
+                        )
                     } else {
                         pendingRingtoneResult = result
-                        openRingtonePicker(call.argument<String>("currentUri"))
+                        openRingtonePicker(
+                            call.argument<String>(
+                                "currentUri",
+                            ),
+                        )
                     }
                 }
 
                 "previewRingtone" -> {
-                    val uri = call.argument<String>("uri")
+                    val uri =
+                        call.argument<String>("uri")
                     stopPreview()
+
                     if (uri.isNullOrBlank()) {
                         result.success(null)
                     } else {
-                        previewRingtone = RingtoneManager.getRingtone(this, Uri.parse(uri))
+                        previewRingtone =
+                            RingtoneManager.getRingtone(
+                                this,
+                                Uri.parse(uri),
+                            )
                         previewRingtone?.play()
                         result.success(null)
                     }
@@ -86,53 +121,88 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun openRingtonePicker(currentUri: String?) {
-        val picker = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
-            putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALL)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Elige el tono de Mi Agenda IA")
-            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-            putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-            putExtra(
-                RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
-                Settings.System.DEFAULT_NOTIFICATION_URI,
-            )
-            if (!currentUri.isNullOrBlank()) {
+    private fun openRingtonePicker(
+        currentUri: String?,
+    ) {
+        val picker =
+            Intent(
+                RingtoneManager.ACTION_RINGTONE_PICKER,
+            ).apply {
                 putExtra(
-                    RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
-                    Uri.parse(currentUri),
+                    RingtoneManager.EXTRA_RINGTONE_TYPE,
+                    RingtoneManager.TYPE_ALL,
                 )
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_TITLE,
+                    "Elige el tono de Mi Agenda IA",
+                )
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT,
+                    true,
+                )
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT,
+                    false,
+                )
+                putExtra(
+                    RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI,
+                    Settings.System.DEFAULT_NOTIFICATION_URI,
+                )
+
+                if (!currentUri.isNullOrBlank()) {
+                    putExtra(
+                        RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                        Uri.parse(currentUri),
+                    )
+                }
             }
-        }
-        startActivityForResult(picker, ringtoneRequestCode)
+
+        @Suppress("DEPRECATION")
+        startActivityForResult(
+            picker,
+            ringtoneRequestCode,
+        )
     }
 
-    @Deprecated("Deprecated in Android, retained for broad device compatibility")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    @Deprecated(
+        "Deprecated in Android, retained for broad device compatibility",
+    )
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?,
+    ) {
         if (requestCode == ringtoneRequestCode) {
-            val result = pendingRingtoneResult
+            val pendingResult = pendingRingtoneResult
             pendingRingtoneResult = null
 
             if (resultCode != Activity.RESULT_OK) {
-                result?.success(null)
+                pendingResult?.success(null)
                 return
             }
 
-            val uri = data?.getParcelableExtra<Uri>(
-                RingtoneManager.EXTRA_RINGTONE_PICKED_URI,
-            )
+            @Suppress("DEPRECATION")
+            val uri =
+                data?.getParcelableExtra<Uri>(
+                    RingtoneManager.EXTRA_RINGTONE_PICKED_URI,
+                )
+
             if (uri == null) {
-                result?.success(null)
+                pendingResult?.success(null)
                 return
             }
 
             val title = try {
-                RingtoneManager.getRingtone(this, uri)?.getTitle(this)
+                RingtoneManager.getRingtone(
+                    this,
+                    uri,
+                )?.getTitle(this)
                     ?: "Tono seleccionado"
             } catch (_: Exception) {
                 "Tono seleccionado"
             }
 
-            result?.success(
+            pendingResult?.success(
                 mapOf(
                     "uri" to uri.toString(),
                     "title" to title,
@@ -141,7 +211,11 @@ class MainActivity : FlutterActivity() {
             return
         }
 
-        super.onActivityResult(requestCode, resultCode, data)
+        super.onActivityResult(
+            requestCode,
+            resultCode,
+            data,
+        )
     }
 
     private fun stopPreview() {
@@ -153,17 +227,28 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun requestAlarmPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.TIRAMISU
+        ) {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                arrayOf(
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ),
                 2001,
             )
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.S
+        ) {
             val alarmManager =
-                getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                getSystemService(
+                    Context.ALARM_SERVICE,
+                ) as AlarmManager
+
             if (!alarmManager.canScheduleExactAlarms()) {
                 startActivity(
                     Intent(
@@ -174,7 +259,10 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+        ) {
             try {
                 startActivity(
                     Intent(
