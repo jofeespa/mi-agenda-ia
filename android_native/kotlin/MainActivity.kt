@@ -3,14 +3,19 @@ package com.miagendaia.mi_agenda_ia
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -18,9 +23,12 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channelName = "com.miagendaia/alarm"
     private val ringtoneRequestCode = 5102
+    private val notificationPermissionRequestCode = 2001
 
     private var pendingRingtoneResult: MethodChannel.Result? = null
     private var previewRingtone: Ringtone? = null
+    private var permissionFlowActive = false
+    private var externalPermissionKind: String? = null
 
     override fun configureFlutterEngine(
         flutterEngine: FlutterEngine,
@@ -78,6 +86,10 @@ class MainActivity : FlutterActivity() {
                 "requestAlarmPermissions" -> {
                     requestAlarmPermissions()
                     result.success(null)
+                }
+
+                "getAlarmPermissionStatus" -> {
+                    result.success(alarmPermissionStatus())
                 }
 
                 "pickRingtone" -> {
@@ -221,33 +233,66 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun requestAlarmPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        permissionFlowActive = true
+        continueAlarmPermissionFlow()
+    }
+
+    private fun alarmPermissionStatus(): Map<String, Boolean> =
+        mapOf(
+            "notifications" to hasNotificationPermission(),
+            "exactAlarms" to hasExactAlarmPermission(),
+            "fullScreenIntent" to hasFullScreenIntentPermission(),
+        )
+
+    private fun hasNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+
+    private fun hasExactAlarmPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarmManager =
+            getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmManager.canScheduleExactAlarms()
+    }
+
+    private fun hasFullScreenIntentPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return true
+        }
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        return notificationManager.canUseFullScreenIntent()
+    }
+
+    private fun continueAlarmPermissionFlow() {
+        if (!permissionFlowActive) return
+
+        if (!hasNotificationPermission()) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                2001,
+                notificationPermissionRequestCode,
             )
+            return
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val alarmManager =
-                getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-            if (!alarmManager.canScheduleExactAlarms()) {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                        Uri.parse("package:$packageName"),
-                    ),
-                )
-            }
+        if (!hasExactAlarmPermission()) {
+            externalPermissionKind = "exact"
+            startActivity(
+                Intent(
+                    Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+            return
         }
 
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.UPSIDE_DOWN_CAKE
-        ) {
+        if (!hasFullScreenIntentPermission()) {
             try {
+                externalPermissionKind = "fullScreen"
                 startActivity(
                     Intent(
                         Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
@@ -255,8 +300,51 @@ class MainActivity : FlutterActivity() {
                     ),
                 )
             } catch (_: Exception) {
+                externalPermissionKind = null
+                permissionFlowActive = false
             }
+            return
         }
+
+        permissionFlowActive = false
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != notificationPermissionRequestCode) return
+
+        if (hasNotificationPermission()) {
+            continueAlarmPermissionFlow()
+        } else {
+            permissionFlowActive = false
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val permissionKind = externalPermissionKind ?: return
+
+        externalPermissionKind = null
+        Handler(Looper.getMainLooper()).postDelayed(
+            {
+                if (!permissionFlowActive) return@postDelayed
+                val granted = when (permissionKind) {
+                    "exact" -> hasExactAlarmPermission()
+                    "fullScreen" -> hasFullScreenIntentPermission()
+                    else -> false
+                }
+                if (!granted) {
+                    permissionFlowActive = false
+                    return@postDelayed
+                }
+                continueAlarmPermissionFlow()
+            },
+            250,
+        )
     }
 
     override fun onDestroy() {

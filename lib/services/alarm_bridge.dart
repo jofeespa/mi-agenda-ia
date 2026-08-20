@@ -14,12 +14,39 @@ class AlarmAction {
   final String itemId;
 }
 
+class AlarmPermissionStatus {
+  const AlarmPermissionStatus({
+    required this.notifications,
+    required this.exactAlarms,
+    required this.fullScreenIntent,
+  });
+
+  final bool notifications;
+  final bool exactAlarms;
+  final bool fullScreenIntent;
+
+  factory AlarmPermissionStatus.fromMap(Map<String, dynamic> raw) {
+    return AlarmPermissionStatus(
+      notifications: raw['notifications'] == true,
+      exactAlarms: raw['exactAlarms'] == true,
+      fullScreenIntent: raw['fullScreenIntent'] == true,
+    );
+  }
+}
+
 class AlarmBridge {
   static const MethodChannel _channel =
       MethodChannel('com.miagendaia/alarm');
 
   Future<void> requestPermissions() =>
       _channel.invokeMethod<void>('requestAlarmPermissions');
+
+  Future<AlarmPermissionStatus> getPermissionStatus() async {
+    final raw = await _channel.invokeMapMethod<String, dynamic>(
+      'getAlarmPermissionStatus',
+    );
+    return AlarmPermissionStatus.fromMap(raw ?? const <String, dynamic>{});
+  }
 
   Future<RingtoneSelection?> pickRingtone(String? currentUri) async {
     final raw = await _channel.invokeMapMethod<String, dynamic>(
@@ -66,8 +93,6 @@ class AlarmBridge {
         item.archived) {
       return;
     }
-
-    await requestPermissions();
 
     for (final occurrence in _occurrences(item)) {
       final triggerAt = occurrence.subtract(

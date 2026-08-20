@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Mi Agenda IA 0.4.2 - APK de prueba
+    name: Mi Agenda IA 0.4.3 corregida - APK de prueba
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -28,10 +28,11 @@ workflows:
           test -f lib/services/storage_service.dart
           test -f lib/widgets/item_card.dart
           test -f test/intent_parser_test.dart
+          test -f test/alarm_bridge_test.dart
           test -f tool/prepare_android.py
 
           grep -q '^name: mi_agenda_ia$' pubspec.yaml
-          grep -q '^version: 0.4.2+15$' pubspec.yaml
+          grep -q '^version: 0.4.3+16$' pubspec.yaml
           grep -q '^description: "Agenda personal por voz:' pubspec.yaml
           python3 -m py_compile tool/prepare_android.py
           echo "Estructura base: OK"
@@ -46,6 +47,8 @@ workflows:
 
           grep -q 'android.permission.RECORD_AUDIO' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.POST_NOTIFICATIONS' android/app/src/main/AndroidManifest.xml
+          test "$(grep -c 'android.permission.BLUETOOTH' android/app/src/main/AndroidManifest.xml || true)" -eq 0
+          grep -q 'getAlarmPermissionStatus' android/app/src/main/kotlin/com/miagendaia/mi_agenda_ia/MainActivity.kt
           grep -q 'gradle-8.13-bin.zip' android/gradle/wrapper/gradle-wrapper.properties
           test ! -f test/widget_test.dart || { echo "No debe existir test/widget_test.dart generado por Flutter"; exit 1; }
           test -f android/app/src/main/kotlin/com/miagendaia/mi_agenda_ia/AlarmService.kt
@@ -88,8 +91,8 @@ workflows:
           set -euo pipefail
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.2.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.3-corregida.apk
 
     artifacts:
-      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.2.apk
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.3-corregida.apk
       - build/app/outputs/flutter-apk/app-debug.apk

@@ -1,6 +1,16 @@
-# Mi Agenda IA — versión 0.4.0
+# Mi Agenda IA — versión 0.4.3 corregida
 
 La 0.4 convierte los avisos en una experiencia tipo despertador.
+
+## Correcciones de 0.4.3
+
+- La grabación por voz solo puede iniciarse una vez por cada pulsación.
+- Crear o editar actividades ya no abre pantallas de permisos.
+- Perfil muestra el estado de notificaciones, alarmas exactas y pantalla
+  completa, y concentra allí su configuración.
+- Las notas no solicitan permisos de alarma.
+- Se eliminaron los permisos Bluetooth y de dispositivos cercanos; se conserva
+  el uso del micrófono del teléfono.
 
 ## Funciones nuevas
 
@@ -48,7 +58,7 @@ de notificación, alarmas exactas y pantalla completa. La app expone
 `Perfil > Permisos de alarmas` para abrir esas autorizaciones.
 
 Workflow Codemagic:
-`Mi Agenda IA 0.4.0 - APK de prueba`
+`Mi Agenda IA 0.4.3 corregida - APK de prueba`
 
 APK:
-`Mi-Agenda-IA-0.4.0.apk`
+`Mi-Agenda-IA-0.4.3-corregida.apk`

@@ -31,12 +31,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<AgendaItem> _items = <AgendaItem>[];
   AppSettings _settings = const AppSettings();
   bool _listening = false;
+  bool _speechStartInProgress = false;
+  bool _voiceResultHandled = false;
   bool _speechReady = false;
   String? _speechLocaleId;
   String _heard = '';
   String _userName = '';
   int _tabIndex = 0;
   HomeFilter _homeFilter = HomeFilter.all;
+  AlarmPermissionStatus? _alarmPermissionStatus;
+  bool _configuringAlarmPermissions = false;
 
   static const Map<int, String> _durationOptions = <int, String>{
     20: '20 segundos',
@@ -80,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(_consumeAlarmAction());
+      unawaited(_refreshAlarmPermissionStatus());
     }
   }
 
@@ -97,6 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
 
     await _consumeAlarmAction();
+    await _refreshAlarmPermissionStatus();
 
     if (_userName.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -274,18 +280,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startListening() async {
+    if (_speechStartInProgress || _listening || _speech.isListening) return;
+
     if (!_speechReady) {
       _showTypedFallback();
       return;
     }
 
     setState(() {
-      _listening = true;
+      _speechStartInProgress = true;
+      _voiceResultHandled = false;
       _heard = '';
     });
 
     try {
-      await _speech.listen(
+      final started = await _speech.listen(
         listenOptions: stt.SpeechListenOptions(
           localeId: _speechLocaleId,
           partialResults: true,
@@ -299,22 +308,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           final recognized = result.recognizedWords.trim();
           setState(() => _heard = recognized);
 
-          if (result.finalResult && recognized.isNotEmpty) {
+          if (result.finalResult &&
+              recognized.isNotEmpty &&
+              !_voiceResultHandled) {
+            _voiceResultHandled = true;
             unawaited(_speech.stop());
             setState(() => _listening = false);
             unawaited(_createFromText(recognized));
           }
         },
       );
+      if (mounted) {
+        setState(() {
+          _speechStartInProgress = false;
+          _listening = started && !_voiceResultHandled;
+        });
+      }
     } on Exception {
       if (mounted) {
-        setState(() => _listening = false);
+        setState(() {
+          _speechStartInProgress = false;
+          _listening = false;
+        });
         _showTypedFallback();
       }
     }
   }
 
   Future<void> _stopListening() async {
+    if (_voiceResultHandled) return;
+    _voiceResultHandled = true;
     await _speech.stop();
     if (!mounted) return;
 
@@ -1506,6 +1529,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildProfilePage() {
+    final permissions = _alarmPermissionStatus;
+
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -1542,13 +1567,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ListTile(
           leading: const Icon(Icons.alarm),
           title: const Text('Permisos de alarmas'),
-          subtitle: const Text(
-            'Activa alarmas exactas y pantalla completa.',
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _permissionLine(
+                'Notificaciones',
+                permissions?.notifications,
+              ),
+              _permissionLine(
+                'Alarmas exactas',
+                permissions?.exactAlarms,
+              ),
+              _permissionLine(
+                'Pantalla completa',
+                permissions?.fullScreenIntent,
+              ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _configuringAlarmPermissions
+                    ? null
+                    : _configureAlarmPermissions,
+                icon: const Icon(Icons.settings),
+                label: const Text('Configurar permisos'),
+              ),
+            ],
           ),
-          onTap: _alarms.requestPermissions,
         ),
       ],
     );
+  }
+
+  Widget _permissionLine(String label, bool? granted) {
+    final marker = granted == null ? '…' : (granted ? '✅' : '❌');
+    return Padding(
+      padding: const EdgeInsets.only(top: 3),
+      child: Text('$label $marker'),
+    );
+  }
+
+  Future<void> _refreshAlarmPermissionStatus() async {
+    try {
+      final status = await _alarms.getPermissionStatus();
+      if (mounted) setState(() => _alarmPermissionStatus = status);
+    } on Exception {
+      // La interfaz conserva el estado anterior si Android no responde.
+    }
+  }
+
+  Future<void> _configureAlarmPermissions() async {
+    setState(() => _configuringAlarmPermissions = true);
+    try {
+      await _alarms.requestPermissions();
+      await _refreshAlarmPermissionStatus();
+    } finally {
+      if (mounted) setState(() => _configuringAlarmPermissions = false);
+    }
   }
 
   Future<void> _showHistory() async {

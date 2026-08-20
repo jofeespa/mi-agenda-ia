@@ -36,9 +36,6 @@ def patch_manifest(path: Path) -> None:
     permissions = [
         '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
         '<uses-permission android:name="android.permission.INTERNET" />',
-        '<uses-permission android:name="android.permission.BLUETOOTH" />',
-        '<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />',
-        '<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />',
         '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
         '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
         '<uses-permission android:name="android.permission.VIBRATE" />',
