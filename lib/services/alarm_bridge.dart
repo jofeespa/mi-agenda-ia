@@ -1,6 +1,12 @@
 import 'package:flutter/services.dart';
 import '../models/agenda_item.dart';
 
+class RingtoneSelection {
+  const RingtoneSelection({required this.uri, required this.title});
+  final String uri;
+  final String title;
+}
+
 class AlarmAction {
   const AlarmAction({required this.action, required this.itemId});
   final String action;
@@ -9,7 +15,26 @@ class AlarmAction {
 
 class AlarmBridge {
   static const MethodChannel _channel = MethodChannel('com.miagendaia/alarm');
-  Future<void> requestPermissions() => _channel.invokeMethod<void>('requestAlarmPermissions');
+  Future<void> requestPermissions() =>
+      _channel.invokeMethod<void>('requestAlarmPermissions');
+
+  Future<RingtoneSelection?> pickRingtone(String? currentUri) async {
+    final raw = await _channel.invokeMapMethod<String, dynamic>(
+      'pickRingtone',
+      <String, dynamic>{'currentUri': currentUri},
+    );
+    if (raw == null) return null;
+    final uri = raw['uri'] as String?;
+    final title = raw['title'] as String?;
+    if (uri == null || title == null) return null;
+    return RingtoneSelection(uri: uri, title: title);
+  }
+
+  Future<void> previewRingtone(String uri) =>
+      _channel.invokeMethod<void>('previewRingtone', <String, dynamic>{'uri': uri});
+
+  Future<void> stopRingtonePreview() =>
+      _channel.invokeMethod<void>('stopRingtonePreview');
   Future<void> cancelItem(String itemId) => _channel.invokeMethod<void>('cancelItem', {'id': itemId});
 
   Future<AlarmAction?> consumePendingAction() async {
@@ -31,6 +56,7 @@ class AlarmBridge {
         'title': item.title,
         'timestamp': occurrence.millisecondsSinceEpoch,
         'alertMode': item.alertMode.name,
+        'ringtoneUri': item.ringtoneUri,
         'occurrenceKey': occurrence.millisecondsSinceEpoch.toString(),
       });
     }

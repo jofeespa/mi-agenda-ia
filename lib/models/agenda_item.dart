@@ -16,6 +16,8 @@ class AgendaItem {
     this.completed = false,
     this.progress = 0,
     this.alertMode = AlertMode.soundAndVibration,
+    this.ringtoneUri,
+    this.ringtoneTitle,
     this.recurrence = RecurrenceType.none,
     this.weekdays = const <int>[],
     this.recurrenceEnd,
@@ -31,6 +33,8 @@ class AgendaItem {
   final bool completed;
   final int progress;
   final AlertMode alertMode;
+  final String? ringtoneUri;
+  final String? ringtoneTitle;
   final RecurrenceType recurrence;
   final List<int> weekdays;
   final DateTime? recurrenceEnd;
@@ -48,6 +52,8 @@ class AgendaItem {
         'completed': completed,
         'progress': progress,
         'alertMode': alertMode.name,
+        'ringtoneUri': ringtoneUri,
+        'ringtoneTitle': ringtoneTitle,
         'recurrence': recurrence.name,
         'weekdays': weekdays,
         'recurrenceEnd': recurrenceEnd?.toIso8601String(),
@@ -89,6 +95,8 @@ class AgendaItem {
       completed: map['completed'] as bool? ?? false,
       progress: progress,
       alertMode: alertMode,
+      ringtoneUri: map['ringtoneUri'] as String?,
+      ringtoneTitle: map['ringtoneTitle'] as String?,
       recurrence: recurrence,
       weekdays: weekdays,
       recurrenceEnd: map['recurrenceEnd'] == null ? null : DateTime.parse(map['recurrenceEnd'] as String),

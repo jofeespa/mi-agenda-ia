@@ -1,10 +1,10 @@
-# Mi Agenda IA — versión 0.3.1
+# Mi Agenda IA — versión 0.3.2
 
 Incluye alarmas persistentes con sonido propio en bucle y vibración repetida, acciones OK / Posponer 10 min / Reprogramar, historial, tareas al 100% archivadas, recordatorios/eventos atendidos archivados, recurrencias diarias/semanales/mensuales con fecha final y exportación de notas a TXT.
 
-Workflow: `Mi Agenda IA 0.3.1 - APK de prueba`
+Workflow: `Mi Agenda IA 0.3.2 - APK de prueba`
 
-APK: `Mi-Agenda-IA-0.3.1.apk`
+APK: `Mi-Agenda-IA-0.3.2.apk`
 
 
 ## Corrección 0.3.1
@@ -23,3 +23,24 @@ de avisos:
 También se retiraron las dependencias Flutter que ya no se utilizan
 (`flutter_local_notifications`, `timezone`, `flutter_timezone`) y el import
 directo de `cross_file`.
+
+
+## Mejoras 0.3.2
+
+### Ayuda de comandos de voz
+En Inicio vuelve a aparecer `¿Qué puedo decir?`, con ejemplos para:
+- Nota
+- Tarea
+- Recordatorio
+- Calendario
+
+### Selector de tonos del teléfono
+Para cualquier actividad con sonido se puede:
+- abrir el selector nativo de Android;
+- escoger tonos instalados de llamada, notificación o alarma;
+- guardar el tono junto con la actividad;
+- probar el tono y detener la prueba antes de guardar.
+
+La alarma persistente utiliza el tono seleccionado en bucle. Si el tono deja de
+estar disponible, la app intenta el tono de alarma predeterminado de Android y,
+como último respaldo, usa el sonido interno de Mi Agenda IA.
