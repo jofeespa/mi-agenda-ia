@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../models/agenda_item.dart';
+import '../models/app_settings.dart';
 import '../services/alarm_bridge.dart';
 import '../services/intent_parser.dart';
 import '../services/storage_service.dart';
@@ -28,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final TextEditingController _typedController = TextEditingController();
 
   List<AgendaItem> _items = <AgendaItem>[];
+  AppSettings _settings = const AppSettings();
   bool _listening = false;
   bool _speechReady = false;
   String? _speechLocaleId;
@@ -35,6 +37,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _userName = '';
   int _tabIndex = 0;
   HomeFilter _homeFilter = HomeFilter.all;
+
+  static const Map<int, String> _durationOptions = <int, String>{
+    20: '20 segundos',
+    30: '30 segundos',
+    60: '1 minuto',
+    0: 'Hasta responder',
+  };
+
+  static const Map<int, String> _repeatOptions = <int, String>{
+    0: 'No repetir',
+    5: 'Cada 5 minutos',
+    10: 'Cada 10 minutos',
+    15: 'Cada 15 minutos',
+  };
+
+  static const Map<int, String> _advanceOptions = <int, String>{
+    0: 'A la hora programada',
+    10: '10 minutos antes',
+    30: '30 minutos antes',
+    60: '1 hora antes',
+  };
 
   @override
   void initState() {
@@ -63,43 +86,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _load() async {
     final items = await _storage.loadItems();
     final name = await _storage.loadUserName();
+    final settings = await _storage.loadSettings();
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _items = items;
       _userName = name?.trim() ?? '';
+      _settings = settings;
     });
 
     await _consumeAlarmAction();
 
     if (_userName.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          unawaited(_askName());
-        }
+        if (mounted) unawaited(_askName());
       });
     }
   }
 
   Future<void> _consumeAlarmAction() async {
     final action = await _alarms.consumePendingAction();
-    if (action == null || !mounted) {
-      return;
-    }
+    if (action == null || !mounted) return;
 
     final index = _items.indexWhere((item) => item.id == action.itemId);
-    if (index < 0) {
-      return;
-    }
+    if (index < 0) return;
 
     final item = _items[index];
 
+    if (action.action == 'complete' && item.type == AgendaItemType.task) {
+      await _replaceItem(
+        _copyItem(
+          item,
+          completed: true,
+          progress: 100,
+          archived: true,
+          archivedAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+        reschedule: false,
+      );
+      return;
+    }
+
     if (action.action == 'ok') {
-      final shouldArchive =
-          item.recurrence == RecurrenceType.none ||
+      final shouldArchive = item.recurrence == RecurrenceType.none ||
           (item.recurrenceEnd != null &&
               item.recurrenceEnd!.isBefore(DateTime.now()));
 
@@ -121,15 +152,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     if (action.action == 'reprogram') {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          unawaited(_openEditor(item, isNew: false));
-        }
+        if (mounted) unawaited(_openEditor(item, isNew: false));
       });
     }
   }
 
   AgendaItem _copyItem(
     AgendaItem item, {
+    bool? completed,
+    int? progress,
     bool? archived,
     DateTime? archivedAt,
     DateTime? updatedAt,
@@ -140,11 +171,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       title: item.title,
       rawText: item.rawText,
       dateTime: item.dateTime,
-      completed: item.completed,
-      progress: item.progress,
+      completed: completed ?? item.completed,
+      progress: progress ?? item.progress,
       alertMode: item.alertMode,
       ringtoneUri: item.ringtoneUri,
       ringtoneTitle: item.ringtoneTitle,
+      alarmDurationSeconds: item.alarmDurationSeconds,
+      repeatMinutes: item.repeatMinutes,
+      advanceMinutes: item.advanceMinutes,
       recurrence: item.recurrence,
       weekdays: item.weekdays,
       recurrenceEnd: item.recurrenceEnd,
@@ -175,95 +209,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _askName() async {
-    var draftName = _userName;
+    var draft = _userName;
 
     final result = await showDialog<String>(
       context: context,
       barrierDismissible: _userName.isNotEmpty,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(
-            _userName.isEmpty ? '¿Cómo te llamas?' : 'Editar nombre',
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_userName.isEmpty ? '¿Cómo te llamas?' : 'Editar nombre'),
+        content: TextFormField(
+          initialValue: _userName,
+          autofocus: true,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Tu nombre',
+            border: OutlineInputBorder(),
           ),
-          content: TextFormField(
-            initialValue: _userName,
-            autofocus: true,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(
-              labelText: 'Tu nombre',
-              border: OutlineInputBorder(),
+          onChanged: (value) => draft = value,
+        ),
+        actions: [
+          if (_userName.isNotEmpty)
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
             ),
-            onChanged: (value) => draftName = value,
-            onFieldSubmitted: (value) {
-              final trimmed = value.trim();
-              if (trimmed.isNotEmpty) {
-                Navigator.pop(dialogContext, trimmed);
-              }
+          FilledButton(
+            onPressed: () {
+              final value = draft.trim();
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
             },
+            child: const Text('Guardar'),
           ),
-          actions: [
-            if (_userName.isNotEmpty)
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text('Cancelar'),
-              ),
-            FilledButton(
-              onPressed: () {
-                final trimmed = draftName.trim();
-                if (trimmed.isNotEmpty) {
-                  Navigator.pop(dialogContext, trimmed);
-                }
-              },
-              child: const Text('Guardar'),
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
 
-    if (result == null || !mounted) {
-      return;
-    }
-
+    if (result == null || !mounted) return;
     await _storage.saveUserName(result);
-    if (mounted) {
-      setState(() => _userName = result);
-    }
+    if (mounted) setState(() => _userName = result);
   }
 
   Future<void> _initializeSpeech() async {
     try {
       final available = await _speech.initialize();
       String? localeId;
-
       if (available) {
         final locales = await _speech.locales();
-        const preferredLocales = <String>[
-          'es_EC',
-          'es-EC',
-          'es_ES',
-          'es-ES',
-        ];
-
-        for (final preferred in preferredLocales) {
-          for (final locale in locales) {
-            if (locale.localeId.toLowerCase() ==
-                preferred.toLowerCase()) {
-              localeId = locale.localeId;
-              break;
-            }
-          }
-          if (localeId != null) {
+        for (final locale in locales) {
+          if (locale.localeId.toLowerCase().startsWith('es')) {
+            localeId = locale.localeId;
             break;
-          }
-        }
-
-        if (localeId == null) {
-          for (final locale in locales) {
-            if (locale.localeId.toLowerCase().startsWith('es')) {
-              localeId = locale.localeId;
-              break;
-            }
           }
         }
       }
@@ -275,9 +269,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
       }
     } on Exception {
-      if (mounted) {
-        setState(() => _speechReady = false);
-      }
+      if (mounted) setState(() => _speechReady = false);
     }
   }
 
@@ -303,10 +295,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           listenFor: const Duration(seconds: 30),
         ),
         onResult: (result) {
-          if (!mounted) {
-            return;
-          }
-
+          if (!mounted) return;
           final recognized = result.recognizedWords.trim();
           setState(() => _heard = recognized);
 
@@ -327,10 +316,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _stopListening() async {
     await _speech.stop();
-
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() => _listening = false);
     final text = _heard.trim();
@@ -344,49 +330,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     showDialog<void>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Escribe tu orden'),
-          content: TextField(
-            controller: _typedController,
-            autofocus: true,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Ej.: Recuérdame llamar mañana a las 9',
-              border: OutlineInputBorder(),
-            ),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Escribe tu orden'),
+        content: TextField(
+          controller: _typedController,
+          autofocus: true,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Ej.: Recuérdame llamar mañana a las 9',
+            border: OutlineInputBorder(),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final text = _typedController.text.trim();
-                Navigator.pop(dialogContext);
-                if (text.isNotEmpty) {
-                  unawaited(_createFromText(text));
-                }
-              },
-              child: const Text('Interpretar'),
-            ),
-          ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final text = _typedController.text.trim();
+              Navigator.pop(dialogContext);
+              if (text.isNotEmpty) unawaited(_createFromText(text));
+            },
+            child: const Text('Interpretar'),
+          ),
+        ],
+      ),
     );
   }
 
   Future<void> _createFromText(String text) async {
     final parsed = _parser.parse(text);
     final now = DateTime.now();
+    final proposed = now.add(const Duration(hours: 1));
 
     final item = AgendaItem(
       id: now.microsecondsSinceEpoch.toString(),
       type: parsed.type,
       title: parsed.title,
       rawText: parsed.rawText,
-      dateTime: parsed.dateTime,
+      dateTime: parsed.type == AgendaItemType.note
+          ? null
+          : parsed.dateTime ?? proposed,
+      alertMode: _settings.defaultAlertMode,
+      ringtoneUri: _settings.defaultRingtoneUri,
+      ringtoneTitle: _settings.defaultRingtoneTitle,
+      alarmDurationSeconds: _settings.defaultAlarmDurationSeconds,
+      repeatMinutes: _settings.defaultRepeatMinutes,
+      advanceMinutes: _settings.defaultAdvanceMinutes,
       createdAt: now,
       updatedAt: now,
     );
@@ -400,15 +391,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }) async {
     var title = item.title;
     var type = item.type;
-    var dateTime = item.dateTime;
+    var dateTime = item.dateTime ?? DateTime.now().add(const Duration(hours: 1));
     var alertMode = item.alertMode;
     var ringtoneUri = item.ringtoneUri;
     var ringtoneTitle = item.ringtoneTitle;
+    var alarmDurationSeconds = item.alarmDurationSeconds;
+    var repeatMinutes = item.repeatMinutes;
+    var advanceMinutes = item.advanceMinutes;
     var recurrence = item.recurrence;
     var recurrenceEnd = item.recurrenceEnd;
     var weekdays = List<int>.from(item.weekdays);
-    var progress =
-        item.type == AgendaItemType.task ? item.progress : 0;
+    var progress = item.type == AgendaItemType.task ? item.progress : 0;
     var deleteRequested = false;
 
     final result = await showModalBottomSheet<AgendaItem>(
@@ -418,528 +411,462 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            final requiresSchedule = type != AgendaItemType.note;
-            final usesSound =
-                alertMode == AlertMode.soundAndVibration ||
-                alertMode == AlertMode.strong ||
-                alertMode == AlertMode.soundOnly;
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final requiresSchedule = type != AgendaItemType.note;
+          final usesTone = alertMode == AlertMode.soundAndVibration ||
+              alertMode == AlertMode.strong ||
+              alertMode == AlertMode.soundOnly ||
+              alertMode == AlertMode.toneAndVoice;
 
-            Future<void> pickDateTime() async {
-              final now = DateTime.now();
-              final initial =
-                  dateTime != null &&
-                          dateTime!.isAfter(
-                            now.subtract(const Duration(days: 1)),
-                          )
-                      ? dateTime!
-                      : now.add(const Duration(hours: 1));
+          Future<void> pickDateTime() async {
+            final now = DateTime.now();
+            final date = await showDatePicker(
+              context: sheetContext,
+              firstDate: DateTime(now.year, now.month, now.day),
+              lastDate: DateTime(now.year + 10, 12, 31),
+              initialDate: dateTime,
+            );
+            if (date == null || !sheetContext.mounted) return;
 
-              final date = await showDatePicker(
-                context: sheetContext,
-                firstDate: DateTime(now.year, now.month, now.day),
-                lastDate: DateTime(now.year + 10, 12, 31),
-                initialDate: initial,
+            final time = await showTimePicker(
+              context: sheetContext,
+              initialTime: TimeOfDay.fromDateTime(dateTime),
+            );
+            if (time == null) return;
+
+            setSheetState(() {
+              dateTime = DateTime(
+                date.year,
+                date.month,
+                date.day,
+                time.hour,
+                time.minute,
               );
+            });
+          }
 
-              if (date == null || !sheetContext.mounted) {
-                return;
-              }
-
-              final time = await showTimePicker(
-                context: sheetContext,
-                initialTime: TimeOfDay.fromDateTime(initial),
-              );
-
-              if (time == null) {
-                return;
-              }
-
+          Future<void> pickTone() async {
+            final selected = await _alarms.pickRingtone(ringtoneUri);
+            if (selected != null && sheetContext.mounted) {
               setSheetState(() {
-                dateTime = DateTime(
-                  date.year,
-                  date.month,
-                  date.day,
-                  time.hour,
-                  time.minute,
+                ringtoneUri = selected.uri;
+                ringtoneTitle = selected.title;
+              });
+            }
+          }
+
+          Future<void> previewTone() async {
+            if (ringtoneUri == null) await pickTone();
+            if (ringtoneUri != null) {
+              await _alarms.previewRingtone(ringtoneUri!);
+            }
+          }
+
+          Future<void> pickRecurrenceEnd() async {
+            final chosen = await showDatePicker(
+              context: sheetContext,
+              firstDate: DateTime(dateTime.year, dateTime.month, dateTime.day),
+              lastDate: DateTime(dateTime.year + 10, 12, 31),
+              initialDate:
+                  recurrenceEnd ?? dateTime.add(const Duration(days: 30)),
+            );
+            if (chosen != null) {
+              setSheetState(() {
+                recurrenceEnd = DateTime(
+                  chosen.year,
+                  chosen.month,
+                  chosen.day,
+                  23,
+                  59,
                 );
               });
             }
+          }
 
-            Future<void> pickRecurrenceEnd() async {
-              final start = dateTime ?? DateTime.now();
-
-              final selected = await showDatePicker(
-                context: sheetContext,
-                firstDate: DateTime(
-                  start.year,
-                  start.month,
-                  start.day,
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              22,
+              22,
+              22,
+              MediaQuery.of(sheetContext).viewInsets.bottom + 26,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isNew ? 'Confirmar actividad' : 'Editar actividad',
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-                lastDate: DateTime(start.year + 10, 12, 31),
-                initialDate:
-                    recurrenceEnd ??
-                    start.add(const Duration(days: 30)),
-              );
-
-              if (selected != null) {
-                setSheetState(() {
-                  recurrenceEnd = DateTime(
-                    selected.year,
-                    selected.month,
-                    selected.day,
-                    23,
-                    59,
-                  );
-                });
-              }
-            }
-
-            Future<void> pickTone() async {
-              final selected =
-                  await _alarms.pickRingtone(ringtoneUri);
-
-              if (selected != null && sheetContext.mounted) {
-                setSheetState(() {
-                  ringtoneUri = selected.uri;
-                  ringtoneTitle = selected.title;
-                });
-              }
-            }
-
-            Future<void> previewTone() async {
-              if (ringtoneUri == null) {
-                final selected =
-                    await _alarms.pickRingtone(ringtoneUri);
-
-                if (selected == null || !sheetContext.mounted) {
-                  return;
-                }
-
-                setSheetState(() {
-                  ringtoneUri = selected.uri;
-                  ringtoneTitle = selected.title;
-                });
-              }
-
-              final uri = ringtoneUri;
-              if (uri != null) {
-                await _alarms.previewRingtone(uri);
-              }
-            }
-
-            return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(
-                22,
-                22,
-                22,
-                MediaQuery.of(sheetContext).viewInsets.bottom + 26,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    isNew
-                        ? 'Confirmar actividad'
-                        : 'Editar actividad',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
+                const SizedBox(height: 18),
+                TextFormField(
+                  initialValue: item.title,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Título',
+                    border: OutlineInputBorder(),
                   ),
-                  const SizedBox(height: 18),
-                  TextFormField(
-                    initialValue: item.title,
-                    maxLines: 2,
-                    textCapitalization:
-                        TextCapitalization.sentences,
+                  onChanged: (value) => title = value,
+                ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<AgendaItemType>(
+                  initialValue: type,
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: AgendaItemType.values
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(_typeName(value)),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    setSheetState(() {
+                      type = value ?? type;
+                      if (type == AgendaItemType.note) {
+                        progress = 0;
+                        recurrence = RecurrenceType.none;
+                        recurrenceEnd = null;
+                        weekdays = <int>[];
+                      }
+                    });
+                  },
+                ),
+                if (requiresSchedule) ...[
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.event),
+                    title: Text(_formatDate(dateTime)),
+                    subtitle: const Text(
+                      'Fecha y hora propuestas. Toca para cambiar.',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: pickDateTime,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<AlertMode>(
+                    initialValue: alertMode,
                     decoration: const InputDecoration(
-                      labelText: 'Título',
+                      labelText: 'Cómo quieres que te avise',
                       border: OutlineInputBorder(),
                     ),
-                    onChanged: (value) => title = value,
-                  ),
-                  const SizedBox(height: 14),
-                  DropdownButtonFormField<AgendaItemType>(
-                    initialValue: type,
-                    decoration: const InputDecoration(
-                      labelText: 'Tipo',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: AgendaItemType.values
+                    items: AlertMode.values
                         .map(
-                          (value) =>
-                              DropdownMenuItem<AgendaItemType>(
+                          (value) => DropdownMenuItem(
                             value: value,
-                            child: Text(_typeName(value)),
+                            child: Text(_alertName(value)),
                           ),
                         )
                         .toList(growable: false),
                     onChanged: (value) {
                       setSheetState(() {
-                        type = value ?? type;
-                        if (type == AgendaItemType.note) {
-                          dateTime = null;
-                          progress = 0;
-                          recurrence = RecurrenceType.none;
+                        alertMode = value ?? alertMode;
+                      });
+                    },
+                  ),
+                  if (usesTone) ...[
+                    const SizedBox(height: 10),
+                    Card(
+                      elevation: 0,
+                      color: const Color(0xFFF6F8FC),
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          children: [
+                            ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.music_note),
+                              title: Text(
+                                ringtoneTitle ??
+                                    'Tono predeterminado de Android',
+                              ),
+                              subtitle: const Text(
+                                'Puedes escoger cualquier tono instalado.',
+                              ),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: pickTone,
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: previewTone,
+                                    icon: const Icon(Icons.play_arrow),
+                                    label: const Text('Probar'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _alarms.stopRingtonePreview,
+                                    icon: const Icon(Icons.stop),
+                                    label: const Text('Detener'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: alarmDurationSeconds,
+                    decoration: const InputDecoration(
+                      labelText: 'Duración del sonido / voz',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _durationOptions.entries
+                        .map(
+                          (entry) => DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        alarmDurationSeconds =
+                            value ?? alarmDurationSeconds;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: repeatMinutes,
+                    decoration: const InputDecoration(
+                      labelText: 'Repetir si no respondo',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _repeatOptions.entries
+                        .map(
+                          (entry) => DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        repeatMinutes = value ?? repeatMinutes;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: advanceMinutes,
+                    decoration: const InputDecoration(
+                      labelText: 'Avisarme antes',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: _advanceOptions.entries
+                        .map(
+                          (entry) => DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        advanceMinutes = value ?? advanceMinutes;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<RecurrenceType>(
+                    initialValue: recurrence,
+                    decoration: const InputDecoration(
+                      labelText: 'Repetición',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: RecurrenceType.values
+                        .map(
+                          (value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(_recurrenceName(value)),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) {
+                      setSheetState(() {
+                        recurrence = value ?? recurrence;
+                        if (recurrence == RecurrenceType.none) {
                           recurrenceEnd = null;
                           weekdays = <int>[];
                         }
                       });
                     },
                   ),
-                  if (requiresSchedule) ...[
+                  if (recurrence == RecurrenceType.weekly) ...[
                     const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 6,
+                      children: List.generate(7, (index) {
+                        final weekday = index + 1;
+                        return FilterChip(
+                          label: Text(_weekdayShort(weekday)),
+                          selected: weekdays.contains(weekday),
+                          onSelected: (selected) {
+                            setSheetState(() {
+                              if (selected) {
+                                if (!weekdays.contains(weekday)) {
+                                  weekdays.add(weekday);
+                                }
+                              } else {
+                                weekdays.remove(weekday);
+                              }
+                            });
+                          },
+                        );
+                      }),
+                    ),
+                  ],
+                  if (recurrence != RecurrenceType.none)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.event),
+                      leading: const Icon(Icons.event_repeat),
                       title: Text(
-                        dateTime == null
-                            ? 'Fecha y hora obligatorias'
-                            : _formatDate(dateTime!),
-                      ),
-                      subtitle: const Text(
-                        'Toca para seleccionar o cambiar',
+                        recurrenceEnd == null
+                            ? 'Fecha final obligatoria'
+                            : 'Hasta ${_formatDateOnly(recurrenceEnd!)}',
                       ),
                       trailing: const Icon(Icons.chevron_right),
-                      onTap: pickDateTime,
+                      onTap: pickRecurrenceEnd,
                     ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<AlertMode>(
-                      initialValue: alertMode,
-                      decoration: const InputDecoration(
-                        labelText: 'Tipo de alarma',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: AlertMode.values
-                          .map(
-                            (value) =>
-                                DropdownMenuItem<AlertMode>(
-                              value: value,
-                              child: Text(_alertName(value)),
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: (value) {
-                        setSheetState(() {
-                          alertMode = value ?? alertMode;
-                        });
-                      },
-                    ),
-                    if (usesSound) ...[
-                      const SizedBox(height: 10),
-                      Card(
-                        elevation: 0,
-                        color: const Color(0xFFF6F8FC),
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Column(
-                            children: [
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading:
-                                    const Icon(Icons.music_note),
-                                title: Text(
-                                  ringtoneTitle ??
-                                      'Elegir tono del teléfono',
-                                ),
-                                subtitle: const Text(
-                                  'Escoge un tono instalado en tu teléfono',
-                                ),
-                                trailing:
-                                    const Icon(Icons.chevron_right),
-                                onTap: pickTone,
-                              ),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: previewTone,
-                                      icon:
-                                          const Icon(Icons.play_arrow),
-                                      label:
-                                          const Text('Probar tono'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed:
-                                          _alarms.stopRingtonePreview,
-                                      icon: const Icon(Icons.stop),
-                                      label: const Text(
-                                        'Detener prueba',
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<RecurrenceType>(
-                      initialValue: recurrence,
-                      decoration: const InputDecoration(
-                        labelText: 'Repetición',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: RecurrenceType.values
-                          .map(
-                            (value) =>
-                                DropdownMenuItem<RecurrenceType>(
-                              value: value,
-                              child: Text(
-                                _recurrenceName(value),
-                              ),
-                            ),
-                          )
-                          .toList(growable: false),
-                      onChanged: (value) {
-                        setSheetState(() {
-                          recurrence = value ?? recurrence;
-                          if (recurrence ==
-                              RecurrenceType.none) {
-                            recurrenceEnd = null;
-                            weekdays = <int>[];
-                          }
-                        });
-                      },
-                    ),
-                    if (recurrence ==
-                        RecurrenceType.weekly) ...[
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Días de la semana',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 6,
-                        children: List.generate(7, (index) {
-                          final weekday = index + 1;
-                          return FilterChip(
-                            label: Text(
-                              _weekdayShort(weekday),
-                            ),
-                            selected:
-                                weekdays.contains(weekday),
-                            onSelected: (selected) {
-                              setSheetState(() {
-                                if (selected) {
-                                  if (!weekdays.contains(
-                                    weekday,
-                                  )) {
-                                    weekdays.add(weekday);
-                                  }
-                                } else {
-                                  weekdays.remove(weekday);
-                                }
-                              });
-                            },
-                          );
-                        }),
-                      ),
-                    ],
-                    if (recurrence !=
-                        RecurrenceType.none) ...[
-                      const SizedBox(height: 8),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading:
-                            const Icon(Icons.event_repeat),
-                        title: Text(
-                          recurrenceEnd == null
-                              ? 'Fecha final obligatoria'
-                              : 'Hasta ${_formatDateOnly(recurrenceEnd!)}',
-                        ),
-                        trailing:
-                            const Icon(Icons.chevron_right),
-                        onTap: pickRecurrenceEnd,
-                      ),
-                    ],
-                  ],
-                  if (type == AgendaItemType.task) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      'Avance: $progress%',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Slider(
-                      value: progress.toDouble(),
-                      min: 0,
-                      max: 100,
-                      divisions: 20,
-                      label: '$progress%',
-                      onChanged: (value) {
-                        setSheetState(() {
-                          progress = value.round();
-                        });
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton(
-                      onPressed: () {
-                        final trimmedTitle = title.trim();
-
-                        if (trimmedTitle.isEmpty) {
-                          _snack(
-                            sheetContext,
-                            'Escribe un título.',
-                          );
-                          return;
-                        }
-
-                        if (requiresSchedule &&
-                            dateTime == null) {
-                          _snack(
-                            sheetContext,
-                            'Debes seleccionar fecha y hora.',
-                          );
-                          return;
-                        }
-
-                        if (recurrence !=
-                                RecurrenceType.none &&
-                            recurrenceEnd == null) {
-                          _snack(
-                            sheetContext,
-                            'Selecciona hasta qué fecha se repetirá.',
-                          );
-                          return;
-                        }
-
-                        if (recurrence ==
-                                RecurrenceType.weekly &&
-                            weekdays.isEmpty) {
-                          _snack(
-                            sheetContext,
-                            'Selecciona al menos un día.',
-                          );
-                          return;
-                        }
-
-                        final effectiveProgress =
-                            type == AgendaItemType.task
-                                ? progress
-                                : 0;
-                        final completed =
-                            type == AgendaItemType.task &&
-                            effectiveProgress == 100;
-
-                        Navigator.pop(
-                          sheetContext,
-                          AgendaItem(
-                            id: item.id,
-                            type: type,
-                            title: trimmedTitle,
-                            rawText: item.rawText,
-                            dateTime:
-                                requiresSchedule ? dateTime : null,
-                            completed: completed,
-                            progress: effectiveProgress,
-                            alertMode: alertMode,
-                            ringtoneUri: ringtoneUri,
-                            ringtoneTitle: ringtoneTitle,
-                            recurrence: recurrence,
-                            weekdays: weekdays,
-                            recurrenceEnd: recurrenceEnd,
-                            archived: completed,
-                            archivedAt:
-                                completed ? DateTime.now() : null,
-                            createdAt: item.createdAt,
-                            updatedAt: DateTime.now(),
-                          ),
-                        );
-                      },
-                      child: Text(
-                        isNew
-                            ? 'Guardar'
-                            : 'Guardar cambios',
-                      ),
-                    ),
-                  ),
-                  if (!isNew) ...[
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton.icon(
-                        onPressed: () async {
-                          final confirmed =
-                              await showDialog<bool>(
-                            context: sheetContext,
-                            builder: (dialogContext) {
-                              return AlertDialog(
-                                title: const Text(
-                                  'Eliminar actividad',
-                                ),
-                                content: const Text(
-                                  'Esta acción no se puede deshacer.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(
-                                      dialogContext,
-                                      false,
-                                    ),
-                                    child: const Text(
-                                      'Cancelar',
-                                    ),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () =>
-                                        Navigator.pop(
-                                      dialogContext,
-                                      true,
-                                    ),
-                                    child:
-                                        const Text('Eliminar'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-
-                          if (confirmed == true &&
-                              sheetContext.mounted) {
-                            deleteRequested = true;
-                            Navigator.pop(sheetContext);
-                          }
-                        },
-                        icon:
-                            const Icon(Icons.delete_outline),
-                        label: const Text(
-                          'Eliminar actividad',
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
-              ),
-            );
-          },
-        );
-      },
+                if (type == AgendaItemType.task) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Avance: $progress%',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  Slider(
+                    value: progress.toDouble(),
+                    min: 0,
+                    max: 100,
+                    divisions: 20,
+                    label: '$progress%',
+                    onChanged: (value) {
+                      setSheetState(() => progress = value.round());
+                    },
+                  ),
+                ],
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: () {
+                      final cleanTitle = title.trim();
+                      if (cleanTitle.isEmpty) {
+                        _snack(sheetContext, 'Escribe un título.');
+                        return;
+                      }
+
+                      if (recurrence != RecurrenceType.none &&
+                          recurrenceEnd == null) {
+                        _snack(
+                          sheetContext,
+                          'Selecciona hasta qué fecha se repetirá.',
+                        );
+                        return;
+                      }
+
+                      if (recurrence == RecurrenceType.weekly &&
+                          weekdays.isEmpty) {
+                        _snack(
+                          sheetContext,
+                          'Selecciona al menos un día.',
+                        );
+                        return;
+                      }
+
+                      final effectiveProgress =
+                          type == AgendaItemType.task ? progress : 0;
+                      final completed = type == AgendaItemType.task &&
+                          effectiveProgress == 100;
+
+                      Navigator.pop(
+                        sheetContext,
+                        AgendaItem(
+                          id: item.id,
+                          type: type,
+                          title: cleanTitle,
+                          rawText: item.rawText,
+                          dateTime: requiresSchedule ? dateTime : null,
+                          completed: completed,
+                          progress: effectiveProgress,
+                          alertMode: alertMode,
+                          ringtoneUri: ringtoneUri,
+                          ringtoneTitle: ringtoneTitle,
+                          alarmDurationSeconds: alarmDurationSeconds,
+                          repeatMinutes: repeatMinutes,
+                          advanceMinutes: advanceMinutes,
+                          recurrence: recurrence,
+                          weekdays: weekdays,
+                          recurrenceEnd: recurrenceEnd,
+                          archived: completed,
+                          archivedAt: completed ? DateTime.now() : null,
+                          createdAt: item.createdAt,
+                          updatedAt: DateTime.now(),
+                        ),
+                      );
+                    },
+                    child: Text(isNew ? 'Guardar' : 'Guardar cambios'),
+                  ),
+                ),
+                if (!isNew)
+                  TextButton.icon(
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: sheetContext,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Eliminar actividad'),
+                          content: const Text(
+                            'Esta acción no se puede deshacer.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
+                              child: const Text('Cancelar'),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
+                              child: const Text('Eliminar'),
+                            ),
+                          ],
+                        ),
+                      );
+
+                      if (confirmed == true && sheetContext.mounted) {
+                        deleteRequested = true;
+                        Navigator.pop(sheetContext);
+                      }
+                    },
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Eliminar actividad'),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
 
     await _alarms.stopRingtonePreview();
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (deleteRequested) {
       await _alarms.cancelItem(item.id);
@@ -950,34 +877,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    if (result == null) {
-      return;
-    }
+    if (result == null) return;
 
     await _replaceItem(
       result,
       reschedule:
-          !result.archived &&
-          result.type != AgendaItemType.note,
+          !result.archived && result.type != AgendaItemType.note,
     );
   }
 
   Future<void> _exportNotes() async {
-    final notes = _items
-        .where((item) => item.type == AgendaItemType.note)
-        .toList();
+    final notes =
+        _items.where((item) => item.type == AgendaItemType.note).toList();
 
     if (notes.isEmpty) {
-      if (mounted) {
-        _snack(context, 'No tienes notas para exportar.');
-      }
+      _snack(context, 'No tienes notas para exportar.');
       return;
     }
 
-    final buffer = StringBuffer(
-      'MIS NOTAS - MI AGENDA IA\n\n',
-    );
-
+    final buffer = StringBuffer('MIS NOTAS - MI AGENDA IA\n\n');
     for (final note in notes) {
       buffer
         ..writeln(note.title)
@@ -1003,12 +921,217 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _showVoiceHelp() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Qué puedo decir?'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('NOTA', style: TextStyle(fontWeight: FontWeight.w800)),
+              Text('“Anota revisar la postulación.”'),
+              SizedBox(height: 12),
+              Text('TAREA', style: TextStyle(fontWeight: FontWeight.w800)),
+              Text(
+                '“Tengo que entregar el informe el viernes a las 4.”',
+              ),
+              SizedBox(height: 12),
+              Text(
+                'RECORDATORIO',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              Text(
+                '“Recuérdame tomar la pastilla mañana a las 8.”',
+              ),
+              SizedBox(height: 12),
+              Text(
+                'CALENDARIO',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              Text(
+                '“Agenda reunión con el director el jueves a las 3.”',
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _editDefaultAlertSettings() async {
+    var mode = _settings.defaultAlertMode;
+    var ringtoneUri = _settings.defaultRingtoneUri;
+    var ringtoneTitle = _settings.defaultRingtoneTitle;
+    var duration = _settings.defaultAlarmDurationSeconds;
+    var repeat = _settings.defaultRepeatMinutes;
+    var advance = _settings.defaultAdvanceMinutes;
+
+    final result = await showModalBottomSheet<AppSettings>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final usesTone = mode == AlertMode.soundAndVibration ||
+              mode == AlertMode.strong ||
+              mode == AlertMode.soundOnly ||
+              mode == AlertMode.toneAndVoice;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Avisos predeterminados',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<AlertMode>(
+                  initialValue: mode,
+                  decoration: const InputDecoration(
+                    labelText: 'Modo de aviso',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: AlertMode.values
+                      .map(
+                        (value) => DropdownMenuItem(
+                          value: value,
+                          child: Text(_alertName(value)),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setSheetState(() => mode = value ?? mode);
+                  },
+                ),
+                if (usesTone) ...[
+                  const SizedBox(height: 10),
+                  ListTile(
+                    leading: const Icon(Icons.music_note),
+                    title: Text(
+                      ringtoneTitle ?? 'Tono predeterminado de Android',
+                    ),
+                    subtitle: const Text('Toca para elegir otro tono'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () async {
+                      final selected =
+                          await _alarms.pickRingtone(ringtoneUri);
+                      if (selected != null && sheetContext.mounted) {
+                        setSheetState(() {
+                          ringtoneUri = selected.uri;
+                          ringtoneTitle = selected.title;
+                        });
+                      }
+                    },
+                  ),
+                ],
+                const SizedBox(height: 10),
+                DropdownButtonFormField<int>(
+                  initialValue: duration,
+                  decoration: const InputDecoration(
+                    labelText: 'Duración del aviso',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _durationOptions.entries
+                      .map(
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setSheetState(() => duration = value ?? duration);
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<int>(
+                  initialValue: repeat,
+                  decoration: const InputDecoration(
+                    labelText: 'Repetir si no respondo',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _repeatOptions.entries
+                      .map(
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setSheetState(() => repeat = value ?? repeat);
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<int>(
+                  initialValue: advance,
+                  decoration: const InputDecoration(
+                    labelText: 'Avisarme antes',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _advanceOptions.entries
+                      .map(
+                        (entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    setSheetState(() => advance = value ?? advance);
+                  },
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () {
+                      Navigator.pop(
+                        sheetContext,
+                        AppSettings(
+                          defaultAlertMode: mode,
+                          defaultRingtoneUri: ringtoneUri,
+                          defaultRingtoneTitle: ringtoneTitle,
+                          defaultAlarmDurationSeconds: duration,
+                          defaultRepeatMinutes: repeat,
+                          defaultAdvanceMinutes: advance,
+                        ),
+                      );
+                    },
+                    child: const Text('Guardar preferencias'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    if (result != null && mounted) {
+      await _storage.saveSettings(result);
+      setState(() => _settings = result);
+    }
+  }
+
   List<AgendaItem> get _activeItems =>
       _items.where((item) => !item.archived).toList();
 
   List<AgendaItem> get _historyItems {
-    final items =
-        _items.where((item) => item.archived).toList();
+    final items = _items.where((item) => item.archived).toList();
     items.sort((a, b) {
       final aDate = a.archivedAt ?? a.updatedAt;
       final bDate = b.archivedAt ?? b.updatedAt;
@@ -1017,54 +1140,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return items;
   }
 
-  int _count(AgendaItemType type) {
-    return _activeItems
-        .where((item) => item.type == type)
-        .length;
-  }
-
   List<AgendaItem> get _homeItems {
     switch (_homeFilter) {
       case HomeFilter.all:
         return _activeItems;
       case HomeFilter.tasks:
         return _activeItems
-            .where(
-              (item) =>
-                  item.type == AgendaItemType.task,
-            )
+            .where((item) => item.type == AgendaItemType.task)
             .toList();
       case HomeFilter.reminders:
         return _activeItems
-            .where(
-              (item) =>
-                  item.type == AgendaItemType.reminder,
-            )
+            .where((item) => item.type == AgendaItemType.reminder)
             .toList();
     }
   }
 
-  List<AgendaItem> _itemsOfType(AgendaItemType type) {
-    final items = _activeItems
-        .where((item) => item.type == type)
-        .toList();
+  int _count(AgendaItemType type) =>
+      _activeItems.where((item) => item.type == type).length;
 
+  List<AgendaItem> _itemsOfType(AgendaItemType type) {
+    final items =
+        _activeItems.where((item) => item.type == type).toList();
     items.sort((a, b) {
       final aDate = a.dateTime;
       final bDate = b.dateTime;
-
       if (aDate == null && bDate == null) {
         return b.updatedAt.compareTo(a.updatedAt);
       }
-      if (aDate == null) {
-        return 1;
-      }
-      if (bDate == null) {
-        return -1;
-      }
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
       return aDate.compareTo(bDate);
     });
-
     return items;
   }
 
@@ -1076,8 +1182,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: 'Calendario',
         subtitle: 'Tus eventos programados',
         type: AgendaItemType.event,
-        emptyText:
-            'Todavía no tienes eventos en el calendario.',
+        emptyText: 'Todavía no tienes eventos.',
       ),
       _buildNotesPage(),
       _buildProfilePage(),
@@ -1122,131 +1227,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _showVoiceHelp() async {
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('¿Qué puedo decir?'),
-          content: const SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'NOTA',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text('“Anota revisar la postulación.”'),
-                SizedBox(height: 14),
-                Text(
-                  'TAREA',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  '“Tengo que entregar el informe el viernes a las 4.”',
-                ),
-                SizedBox(height: 14),
-                Text(
-                  'RECORDATORIO',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  '“Recuérdame tomar la pastilla mañana a las 8.”',
-                ),
-                SizedBox(height: 14),
-                Text(
-                  'CALENDARIO',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  '“Agenda reunión con el director el jueves a las 3.”',
-                ),
-                SizedBox(height: 14),
-                Text(
-                  'Después de hablar puedes corregir el tipo, fecha, tono y repetición.',
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext),
-              child: const Text('Entendido'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Widget _buildHome() {
     final items = _homeItems;
 
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding:
-              const EdgeInsets.fromLTRB(20, 18, 20, 0),
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
           sliver: SliverList.list(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _userName.isEmpty
-                              ? '¡Hola! 👋'
-                              : '¡Hola, $_userName! 👋',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const Text(
-                          'Tu asistente personal',
-                          style: TextStyle(
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      setState(() => _tabIndex = 3);
-                    },
-                    icon:
-                        const Icon(Icons.settings_outlined),
-                  ),
-                ],
+              Text(
+                _userName.isEmpty ? '¡Hola! 👋' : '¡Hola, $_userName! 👋',
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const Text(
+                'Tu asistente personal',
+                style: TextStyle(color: Color(0xFF64748B)),
               ),
               const SizedBox(height: 18),
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [
-                      Color(0xFF0759D8),
-                      Color(0xFF0B78F0),
-                    ],
+                    colors: [Color(0xFF0759D8), Color(0xFF0B78F0)],
                   ),
                   borderRadius: BorderRadius.circular(22),
                 ),
                 child: Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceAround,
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _summary(
                       'Recordatorios',
@@ -1266,7 +1277,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ],
                 ),
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 24),
               Row(
                 children: [
                   const Expanded(
@@ -1280,26 +1291,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   TextButton.icon(
                     onPressed: _showVoiceHelp,
-                    icon:
-                        const Icon(Icons.help_outline),
-                    label:
-                        const Text('¿Qué puedo decir?'),
+                    icon: const Icon(Icons.help_outline),
+                    label: const Text('¿Qué puedo decir?'),
                   ),
                 ],
               ),
-              const SizedBox(height: 6),
-              const Text(
-                'Habla de forma natural. Tú confirmas antes de guardar.',
-                style: TextStyle(
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Center(
                 child: GestureDetector(
-                  onTap: _listening
-                      ? _stopListening
-                      : _startListening,
+                  onTap: _listening ? _stopListening : _startListening,
                   onLongPress: _showTypedFallback,
                   child: Container(
                     width: 132,
@@ -1308,10 +1308,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       shape: BoxShape.circle,
                       color: Color(0xFF075FE4),
                     ),
-                    child: Icon(
-                      _listening
-                          ? Icons.stop_rounded
-                          : Icons.mic_rounded,
+                    child: const Icon(
+                      Icons.mic_rounded,
                       color: Colors.white,
                       size: 58,
                     ),
@@ -1322,17 +1320,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Center(
                 child: Text(
                   _listening
-                      ? (_heard.isEmpty
-                          ? 'Te escucho…'
-                          : _heard)
+                      ? (_heard.isEmpty ? 'Te escucho…' : _heard)
                       : 'Toca para hablar · Mantén para escribir',
                   textAlign: TextAlign.center,
                 ),
               ),
+              if (_listening) ...[
+                const SizedBox(height: 12),
+                Center(
+                  child: FilledButton.icon(
+                    onPressed: _stopListening,
+                    icon: const Icon(Icons.check),
+                    label: const Text('Terminar dictado'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     'Organizador',
@@ -1352,37 +1357,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 children: [
                   ChoiceChip(
                     label: const Text('Todos'),
-                    selected:
-                        _homeFilter == HomeFilter.all,
-                    onSelected: (_) {
-                      setState(
-                        () =>
-                            _homeFilter = HomeFilter.all,
-                      );
-                    },
+                    selected: _homeFilter == HomeFilter.all,
+                    onSelected: (_) =>
+                        setState(() => _homeFilter = HomeFilter.all),
                   ),
                   ChoiceChip(
                     label: const Text('Tareas'),
-                    selected:
-                        _homeFilter == HomeFilter.tasks,
-                    onSelected: (_) {
-                      setState(
-                        () =>
-                            _homeFilter = HomeFilter.tasks,
-                      );
-                    },
+                    selected: _homeFilter == HomeFilter.tasks,
+                    onSelected: (_) =>
+                        setState(() => _homeFilter = HomeFilter.tasks),
                   ),
                   ChoiceChip(
                     label: const Text('Recordatorios'),
-                    selected:
-                        _homeFilter ==
-                        HomeFilter.reminders,
-                    onSelected: (_) {
-                      setState(
-                        () => _homeFilter =
-                            HomeFilter.reminders,
-                      );
-                    },
+                    selected: _homeFilter == HomeFilter.reminders,
+                    onSelected: (_) =>
+                        setState(() => _homeFilter = HomeFilter.reminders),
                   ),
                 ],
               ),
@@ -1395,27 +1384,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             child: Padding(
               padding: EdgeInsets.all(28),
               child: Center(
-                child: Text(
-                  'No hay elementos en esta categoría.',
-                ),
+                child: Text('No hay elementos en esta categoría.'),
               ),
             ),
           )
         else
           SliverPadding(
-            padding:
-                const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
             sliver: SliverList.builder(
               itemCount: items.length,
-              itemBuilder: (context, index) {
-                return ItemCard(
-                  item: items[index],
-                  onTap: () => _openEditor(
-                    items[index],
-                    isNew: false,
-                  ),
-                );
-              },
+              itemBuilder: (context, index) => ItemCard(
+                item: items[index],
+                onTap: () => _openEditor(
+                  items[index],
+                  isNew: false,
+                ),
+              ),
             ),
           ),
       ],
@@ -1453,19 +1437,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           )
         else
           SliverPadding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.builder(
               itemCount: items.length,
-              itemBuilder: (context, index) {
-                return ItemCard(
-                  item: items[index],
-                  onTap: () => _openEditor(
-                    items[index],
-                    isNew: false,
-                  ),
-                );
-              },
+              itemBuilder: (context, index) => ItemCard(
+                item: items[index],
+                onTap: () => _openEditor(
+                  items[index],
+                  isNew: false,
+                ),
+              ),
             ),
           ),
       ],
@@ -1494,8 +1475,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   FilledButton.icon(
                     onPressed: _exportNotes,
-                    icon:
-                        const Icon(Icons.download_outlined),
+                    icon: const Icon(Icons.download_outlined),
                     label: const Text('Exportar TXT'),
                   ),
                 ],
@@ -1505,27 +1485,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         if (notes.isEmpty)
           const SliverToBoxAdapter(
-            child: Center(
-              child: Text(
-                'Todavía no tienes notas.',
-              ),
-            ),
+            child: Center(child: Text('Todavía no tienes notas.')),
           )
         else
           SliverPadding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
             sliver: SliverList.builder(
               itemCount: notes.length,
-              itemBuilder: (context, index) {
-                return ItemCard(
-                  item: notes[index],
-                  onTap: () => _openEditor(
-                    notes[index],
-                    isNew: false,
-                  ),
-                );
-              },
+              itemBuilder: (context, index) => ItemCard(
+                item: notes[index],
+                onTap: () => _openEditor(
+                  notes[index],
+                  isNew: false,
+                ),
+              ),
             ),
           ),
       ],
@@ -1546,25 +1519,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         const SizedBox(height: 14),
         ListTile(
           leading: const Icon(Icons.person),
-          title: Text(
-            _userName.isEmpty ? 'Sin nombre' : _userName,
-          ),
+          title: Text(_userName.isEmpty ? 'Sin nombre' : _userName),
           subtitle: const Text('Editar nombre'),
           onTap: _askName,
         ),
         ListTile(
+          leading: const Icon(Icons.notifications_active),
+          title: const Text('Avisos predeterminados'),
+          subtitle: Text(
+            '${_alertName(_settings.defaultAlertMode)} · '
+            '${_durationOptions[_settings.defaultAlarmDurationSeconds]}',
+          ),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _editDefaultAlertSettings,
+        ),
+        ListTile(
           leading: const Icon(Icons.history),
           title: const Text('Historial'),
-          subtitle: Text(
-            '${_historyItems.length} elementos',
-          ),
+          subtitle: Text('${_historyItems.length} elementos'),
           onTap: _showHistory,
         ),
         ListTile(
           leading: const Icon(Icons.alarm),
           title: const Text('Permisos de alarmas'),
           subtitle: const Text(
-            'Activa notificaciones, alarmas exactas y pantalla completa',
+            'Activa alarmas exactas y pantalla completa.',
           ),
           onTap: _alarms.requestPermissions,
         ),
@@ -1579,56 +1558,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (sheetContext) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          maxChildSize: 0.95,
-          builder: (context, controller) {
-            return ListView(
-              controller: controller,
-              padding: const EdgeInsets.all(20),
-              children: [
-                const Text(
-                  'Historial',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.w900,
-                  ),
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.8,
+        maxChildSize: 0.95,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.all(20),
+          children: [
+            const Text(
+              'Historial',
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (history.isEmpty)
+              const Text('Todavía no hay historial.')
+            else
+              ...history.map(
+                (item) => ItemCard(
+                  item: item,
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    unawaited(_openEditor(item, isNew: false));
+                  },
                 ),
-                const SizedBox(height: 12),
-                if (history.isEmpty)
-                  const Text(
-                    'Todavía no hay historial.',
-                  )
-                else
-                  ...history.map(
-                    (item) => ItemCard(
-                      item: item,
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        unawaited(
-                          _openEditor(
-                            item,
-                            isNew: false,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            );
-          },
-        );
-      },
+              ),
+          ],
+        ),
+      ),
     );
   }
 
-  Widget _summary(
-    String label,
-    int value,
-    IconData icon,
-  ) {
+  Widget _summary(String label, int value, IconData icon) {
     return Column(
       children: [
         Icon(icon, color: Colors.white),
@@ -1651,69 +1615,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  static void _snack(
-    BuildContext context,
-    String text,
-  ) {
+  static void _snack(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(text)),
     );
   }
 
-  static String _typeName(AgendaItemType type) {
-    return switch (type) {
-      AgendaItemType.note => 'Nota',
-      AgendaItemType.task => 'Tarea',
-      AgendaItemType.reminder => 'Recordatorio',
-      AgendaItemType.event => 'Calendario',
-    };
-  }
+  static String _typeName(AgendaItemType type) => switch (type) {
+        AgendaItemType.note => 'Nota',
+        AgendaItemType.task => 'Tarea',
+        AgendaItemType.reminder => 'Recordatorio',
+        AgendaItemType.event => 'Calendario',
+      };
 
-  static String _alertName(AlertMode mode) {
-    return switch (mode) {
-      AlertMode.soundAndVibration => 'Sonido + vibración',
-      AlertMode.strong => 'Alarma fuerte + vibración',
-      AlertMode.soundOnly => 'Solo sonido',
-      AlertMode.vibrationOnly => 'Solo vibración',
-      AlertMode.silent => 'Silencioso',
-    };
-  }
+  static String _alertName(AlertMode mode) => switch (mode) {
+        AlertMode.soundAndVibration => 'Tono + vibración',
+        AlertMode.strong => 'Alarma fuerte + vibración',
+        AlertMode.soundOnly => 'Solo tono',
+        AlertMode.voice => 'Leer actividad con voz',
+        AlertMode.toneAndVoice => 'Tono + voz',
+        AlertMode.vibrationOnly => 'Solo vibración',
+        AlertMode.silent => 'Silencioso',
+      };
 
-  static String _recurrenceName(
-    RecurrenceType recurrence,
-  ) {
-    return switch (recurrence) {
-      RecurrenceType.none => 'No repetir',
-      RecurrenceType.daily => 'Todos los días',
-      RecurrenceType.weekly => 'Días de la semana',
-      RecurrenceType.monthly => 'Cada mes',
-    };
-  }
+  static String _recurrenceName(RecurrenceType recurrence) =>
+      switch (recurrence) {
+        RecurrenceType.none => 'No repetir',
+        RecurrenceType.daily => 'Todos los días',
+        RecurrenceType.weekly => 'Días de la semana',
+        RecurrenceType.monthly => 'Cada mes',
+      };
 
-  static String _weekdayShort(int weekday) {
-    return switch (weekday) {
-      DateTime.monday => 'Lun',
-      DateTime.tuesday => 'Mar',
-      DateTime.wednesday => 'Mié',
-      DateTime.thursday => 'Jue',
-      DateTime.friday => 'Vie',
-      DateTime.saturday => 'Sáb',
-      DateTime.sunday => 'Dom',
-      _ => '?',
-    };
-  }
+  static String _weekdayShort(int weekday) => switch (weekday) {
+        DateTime.monday => 'Lun',
+        DateTime.tuesday => 'Mar',
+        DateTime.wednesday => 'Mié',
+        DateTime.thursday => 'Jue',
+        DateTime.friday => 'Vie',
+        DateTime.saturday => 'Sáb',
+        DateTime.sunday => 'Dom',
+        _ => '?',
+      };
 
   static String _formatDate(DateTime dateTime) {
-    final hour =
-        dateTime.hour.toString().padLeft(2, '0');
-    final minute =
-        dateTime.minute.toString().padLeft(2, '0');
-
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} · '
         '$hour:$minute';
   }
 
-  static String _formatDateOnly(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-  }
+  static String _formatDateOnly(DateTime dateTime) =>
+      '${dateTime.day}/${dateTime.month}/${dateTime.year}';
 }

@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Mi Agenda IA 0.3.3 - APK de prueba
+    name: Mi Agenda IA 0.4.0 - APK de prueba
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -18,13 +18,14 @@ workflows:
       - name: Validar estructura base
         script: |
           set -euo pipefail
-          for f in             pubspec.yaml             analysis_options.yaml             lib/main.dart             lib/models/agenda_item.dart             lib/screens/home_screen.dart             lib/services/intent_parser.dart             lib/services/storage_service.dart             lib/widgets/item_card.dart             test/intent_parser_test.dart             tool/prepare_android.py
+          for f in             pubspec.yaml             analysis_options.yaml             lib/main.dart             lib/models/agenda_item.dart
+             lib/models/app_settings.dart             lib/screens/home_screen.dart             lib/services/intent_parser.dart             lib/services/storage_service.dart             lib/widgets/item_card.dart             test/intent_parser_test.dart             tool/prepare_android.py
           do
             test -f "$f" || { echo "Falta archivo requerido: $f"; exit 1; }
           done
 
           grep -q '^name: mi_agenda_ia$' pubspec.yaml
-          grep -q '^version: 0.3.3+12$' pubspec.yaml
+          grep -q '^version: 0.4.0+13$' pubspec.yaml
           grep -q '^description: "Agenda personal por voz:' pubspec.yaml
           python3 -m py_compile tool/prepare_android.py
           echo "Estructura base: OK"
@@ -42,10 +43,14 @@ workflows:
           grep -q 'gradle-8.13-bin.zip' android/gradle/wrapper/gradle-wrapper.properties
           test ! -f test/widget_test.dart || { echo "No debe existir test/widget_test.dart generado por Flutter"; exit 1; }
           test -f android/app/src/main/kotlin/com/miagendaia/mi_agenda_ia/AlarmService.kt
+          test -f android/app/src/main/kotlin/com/miagendaia/mi_agenda_ia/AlarmActivity.kt
           test -f android/app/src/main/res/raw/alarm_tone.wav
           grep -q 'android.permission.SCHEDULE_EXACT_ALARM' android/app/src/main/AndroidManifest.xml
           grep -q 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' android/app/src/main/AndroidManifest.xml
           grep -q '<service android:name=".AlarmService"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:name=".AlarmActivity"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:showWhenLocked="true"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:turnScreenOn="true"' android/app/src/main/AndroidManifest.xml
           grep -q '<receiver android:name=".AlarmReceiver"' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.VIBRATE' android/app/src/main/AndroidManifest.xml
           grep -q 'android.permission.WAKE_LOCK' android/app/src/main/AndroidManifest.xml
@@ -77,8 +82,8 @@ workflows:
           set -euo pipefail
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.3.3.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.0.apk
 
     artifacts:
-      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.3.3.apk
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.0.apk
       - build/app/outputs/flutter-apk/app-debug.apk

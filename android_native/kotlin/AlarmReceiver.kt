@@ -6,30 +6,34 @@ import android.content.Intent
 import android.os.Build
 
 class AlarmReceiver : BroadcastReceiver() {
-    override fun onReceive(
-        context: Context,
-        intent: Intent,
-    ) {
+    override fun onReceive(context: Context, intent: Intent) {
         val serviceIntent =
             Intent(context, AlarmService::class.java).apply {
                 action = AlarmService.ACTION_START
-                putExtra(
-                    "id",
-                    intent.getStringExtra("id") ?: "",
-                )
+                putExtra("id", intent.getStringExtra("id") ?: "")
                 putExtra(
                     "title",
-                    intent.getStringExtra("title")
-                        ?: "Recordatorio",
+                    intent.getStringExtra("title") ?: "Recordatorio",
+                )
+                putExtra(
+                    "itemType",
+                    intent.getStringExtra("itemType") ?: "reminder",
                 )
                 putExtra(
                     "alertMode",
-                    intent.getStringExtra("alertMode")
-                        ?: "soundAndVibration",
+                    intent.getStringExtra("alertMode") ?: "soundAndVibration",
                 )
                 putExtra(
                     "ringtoneUri",
                     intent.getStringExtra("ringtoneUri") ?: "",
+                )
+                putExtra(
+                    "alarmDurationSeconds",
+                    intent.getIntExtra("alarmDurationSeconds", 30),
+                )
+                putExtra(
+                    "repeatMinutes",
+                    intent.getIntExtra("repeatMinutes", 0),
                 )
             }
 

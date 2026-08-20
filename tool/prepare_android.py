@@ -87,6 +87,14 @@ def patch_manifest(path: Path) -> None:
     native_components = """
         <receiver android:name=".AlarmReceiver" android:exported="false" />
         <receiver android:name=".AlarmActionReceiver" android:exported="false" />
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:theme="@style/LaunchTheme" />
         <service android:name=".AlarmService" android:exported="false" android:stopWithTask="false" android:foregroundServiceType="mediaPlayback" />
 """
     if ".AlarmService" not in text:

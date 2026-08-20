@@ -1,64 +1,54 @@
-# Mi Agenda IA — versión 0.3.3
+# Mi Agenda IA — versión 0.4.0
 
-Incluye alarmas persistentes con sonido propio en bucle y vibración repetida, acciones OK / Posponer 10 min / Reprogramar, historial, tareas al 100% archivadas, recordatorios/eventos atendidos archivados, recurrencias diarias/semanales/mensuales con fecha final y exportación de notas a TXT.
+La 0.4 convierte los avisos en una experiencia tipo despertador.
 
-Workflow: `Mi Agenda IA 0.3.3 - APK de prueba`
+## Funciones nuevas
 
-APK: `Mi-Agenda-IA-0.3.3.apk`
+- Tono predeterminado configurable desde Perfil.
+- Botón `Terminar dictado` durante la grabación; también sigue funcionando
+  el cierre automático por silencio o tiempo.
+- Fecha/hora sugerida para nuevas tareas, recordatorios y calendario:
+  hora actual + 1 hora.
+- Modos de aviso:
+  - Tono + vibración
+  - Alarma fuerte + vibración
+  - Solo tono
+  - Leer actividad con voz
+  - Tono + voz
+  - Solo vibración
+  - Silencioso
+- Aviso anticipado: al momento, 10 min, 30 min o 1 hora antes.
+- Duración del sonido/voz/vibración: 20 s, 30 s, 1 min o Hasta responder.
+- Repetición si no se responde: desactivada, 5, 10 o 15 minutos.
+- Pantalla nativa de alarma tipo despertador:
+  - se muestra sobre pantalla bloqueada;
+  - enciende la pantalla;
+  - solicita retirar keyguard cuando Android lo permite;
+  - nunca salta PIN, patrón, contraseña o biometría;
+  - no se cierra con el botón Atrás;
+  - queda pendiente hasta elegir una acción.
+- Acciones grandes:
+  - OK / Terminar
+  - Completar tarea
+  - Posponer 10 minutos
+  - Posponer 30 minutos
+  - Posponer 1 hora
+  - Reprogramar
+- Historial, recurrencias, exportación TXT, ayuda de voz y selector de tonos
+  continúan disponibles.
 
+## Android
 
-## Corrección 0.3.1
+La implementación usa AlarmManager, foreground service, TextToSpeech,
+full-screen intent, setShowWhenLocked, setTurnScreenOn y
+requestDismissKeyguard.
 
-La compilación 0.3.0 falló durante `flutter analyze` porque todavía quedaba
-`lib/services/notification_service.dart`, perteneciente al sistema de avisos
-anterior. Ese archivo seguía usando `AlertMode.normal` y
-`AlertMode.vibration`, nombres que ya no existen desde que la 0.3 migró al
-sistema de alarmas persistentes nativo.
+En Android moderno, el usuario puede tener que conceder expresamente permisos
+de notificación, alarmas exactas y pantalla completa. La app expone
+`Perfil > Permisos de alarmas` para abrir esas autorizaciones.
 
-La 0.3.1 elimina por completo ese camino antiguo y deja una sola arquitectura
-de avisos:
+Workflow Codemagic:
+`Mi Agenda IA 0.4.0 - APK de prueba`
 
-`AlarmBridge (Dart) -> AlarmManager -> AlarmReceiver -> AlarmService (Android)`
-
-También se retiraron las dependencias Flutter que ya no se utilizan
-(`flutter_local_notifications`, `timezone`, `flutter_timezone`) y el import
-directo de `cross_file`.
-
-
-## Mejoras 0.3.2
-
-### Ayuda de comandos de voz
-En Inicio vuelve a aparecer `¿Qué puedo decir?`, con ejemplos para:
-- Nota
-- Tarea
-- Recordatorio
-- Calendario
-
-### Selector de tonos del teléfono
-Para cualquier actividad con sonido se puede:
-- abrir el selector nativo de Android;
-- escoger tonos instalados de llamada, notificación o alarma;
-- guardar el tono junto con la actividad;
-- probar el tono y detener la prueba antes de guardar.
-
-La alarma persistente utiliza el tono seleccionado en bucle. Si el tono deja de
-estar disponible, la app intenta el tono de alarma predeterminado de Android y,
-como último respaldo, usa el sonido interno de Mi Agenda IA.
-
-
-## Corrección 0.3.3
-
-Se reescribió por completo el editor de actividades de `home_screen.dart` en
-Dart legible y estructurado. La 0.3.2 había insertado el selector de tonos
-dentro de una línea comprimida y dejó un paréntesis sin cerrar.
-
-Durante esta revisión también se detectó y corrigió una incompatibilidad que
-aún no había llegado a aparecer en Codemagic: `MainActivity.kt` enviaba
-`ringtoneUri`, pero `AlarmScheduler.kt` todavía no aceptaba ese argumento.
-
-La cadena completa ahora es coherente:
-
-Flutter -> AlarmBridge -> MainActivity -> AlarmScheduler -> AlarmReceiver ->
-AlarmService
-
-El tono elegido se conserva también al usar `Posponer 10 min`.
+APK:
+`Mi-Agenda-IA-0.4.0.apk`

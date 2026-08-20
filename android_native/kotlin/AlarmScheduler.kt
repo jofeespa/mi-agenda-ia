@@ -13,24 +13,28 @@ object AlarmScheduler {
         context: Context,
         id: String,
         title: String,
+        itemType: String,
         triggerAt: Long,
         alertMode: String,
         ringtoneUri: String,
+        alarmDurationSeconds: Int,
+        repeatMinutes: Int,
         occurrenceKey: String,
     ) {
         val alarmManager =
             context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
         val requestCode =
             ("$id|$occurrenceKey".hashCode() and 0x7fffffff)
 
-        val intent = Intent(
-            context,
-            AlarmReceiver::class.java,
-        ).apply {
+        val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("id", id)
             putExtra("title", title)
+            putExtra("itemType", itemType)
             putExtra("alertMode", alertMode)
             putExtra("ringtoneUri", ringtoneUri)
+            putExtra("alarmDurationSeconds", alarmDurationSeconds)
+            putExtra("repeatMinutes", repeatMinutes)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(

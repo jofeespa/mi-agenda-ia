@@ -18,6 +18,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channelName = "com.miagendaia/alarm"
     private val ringtoneRequestCode = 5102
+
     private var pendingRingtoneResult: MethodChannel.Result? = null
     private var previewRingtone: Ringtone? = null
 
@@ -34,25 +35,28 @@ class MainActivity : FlutterActivity() {
                 "scheduleAlarm" -> {
                     AlarmScheduler.schedule(
                         context = this,
-                        id =
-                            call.argument<String>("id") ?: "",
+                        id = call.argument<String>("id") ?: "",
                         title =
-                            call.argument<String>("title")
-                                ?: "Recordatorio",
+                            call.argument<String>("title") ?: "Recordatorio",
+                        itemType =
+                            call.argument<String>("itemType") ?: "reminder",
                         triggerAt =
-                            call.argument<Number>("timestamp")
-                                ?.toLong()
-                                ?: 0L,
+                            call.argument<Number>("timestamp")?.toLong() ?: 0L,
                         alertMode =
                             call.argument<String>("alertMode")
                                 ?: "soundAndVibration",
                         ringtoneUri =
-                            call.argument<String>("ringtoneUri")
-                                ?: "",
+                            call.argument<String>("ringtoneUri") ?: "",
+                        alarmDurationSeconds =
+                            call.argument<Number>(
+                                "alarmDurationSeconds",
+                            )?.toInt() ?: 30,
+                        repeatMinutes =
+                            call.argument<Number>(
+                                "repeatMinutes",
+                            )?.toInt() ?: 0,
                         occurrenceKey =
-                            call.argument<String>(
-                                "occurrenceKey",
-                            ) ?: "0",
+                            call.argument<String>("occurrenceKey") ?: "0",
                     )
                     result.success(null)
                 }
@@ -80,22 +84,19 @@ class MainActivity : FlutterActivity() {
                     if (pendingRingtoneResult != null) {
                         result.error(
                             "picker_busy",
-                            "Ya hay un selector de tonos abierto.",
+                            "Ya hay un selector abierto.",
                             null,
                         )
                     } else {
                         pendingRingtoneResult = result
                         openRingtonePicker(
-                            call.argument<String>(
-                                "currentUri",
-                            ),
+                            call.argument<String>("currentUri"),
                         )
                     }
                 }
 
                 "previewRingtone" -> {
-                    val uri =
-                        call.argument<String>("uri")
+                    val uri = call.argument<String>("uri")
                     stopPreview()
 
                     if (uri.isNullOrBlank()) {
@@ -121,13 +122,9 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun openRingtonePicker(
-        currentUri: String?,
-    ) {
+    private fun openRingtonePicker(currentUri: String?) {
         val picker =
-            Intent(
-                RingtoneManager.ACTION_RINGTONE_PICKER,
-            ).apply {
+            Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
                 putExtra(
                     RingtoneManager.EXTRA_RINGTONE_TYPE,
                     RingtoneManager.TYPE_ALL,
@@ -164,9 +161,7 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    @Deprecated(
-        "Deprecated in Android, retained for broad device compatibility",
-    )
+    @Deprecated("Compatibilidad con selector de tonos")
     override fun onActivityResult(
         requestCode: Int,
         resultCode: Int,
@@ -196,8 +191,7 @@ class MainActivity : FlutterActivity() {
                 RingtoneManager.getRingtone(
                     this,
                     uri,
-                )?.getTitle(this)
-                    ?: "Tono seleccionado"
+                )?.getTitle(this) ?: "Tono seleccionado"
             } catch (_: Exception) {
                 "Tono seleccionado"
             }
@@ -227,27 +221,17 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun requestAlarmPermissions() {
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.TIRAMISU
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ActivityCompat.requestPermissions(
                 this,
-                arrayOf(
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ),
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
                 2001,
             )
         }
 
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.S
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager =
-                getSystemService(
-                    Context.ALARM_SERVICE,
-                ) as AlarmManager
+                getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
             if (!alarmManager.canScheduleExactAlarms()) {
                 startActivity(
