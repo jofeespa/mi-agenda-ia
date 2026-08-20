@@ -31,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<AgendaItem> _items = <AgendaItem>[];
   AppSettings _settings = const AppSettings();
   bool _listening = false;
+  bool _startingListening = false;
   bool _speechReady = false;
   String? _speechLocaleId;
   String _heard = '';
@@ -274,11 +275,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _startListening() async {
+    if (_startingListening || _listening) return;
     if (!_speechReady) {
       _showTypedFallback();
       return;
     }
 
+    _startingListening = true;
     setState(() {
       _listening = true;
       _heard = '';
@@ -311,6 +314,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() => _listening = false);
         _showTypedFallback();
       }
+    } finally {
+      _startingListening = false;
     }
   }
 

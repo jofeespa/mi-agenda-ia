@@ -221,7 +221,11 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun requestAlarmPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
@@ -244,17 +248,22 @@ class MainActivity : FlutterActivity() {
         }
 
         if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
         ) {
-            try {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
-                        Uri.parse("package:$packageName"),
-                    ),
-                )
-            } catch (_: Exception) {
+            val notificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE)
+                    as android.app.NotificationManager
+
+            if (!notificationManager.canUseFullScreenIntent()) {
+                try {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                            Uri.parse("package:$packageName"),
+                        ),
+                    )
+                } catch (_: Exception) {
+                }
             }
         }
     }

@@ -1,6 +1,6 @@
 workflows:
   android-debug:
-    name: Mi Agenda IA 0.4.2 - APK de prueba
+    name: Mi Agenda IA 0.4.3 - APK de prueba
     instance_type: mac_mini_m2
     max_build_duration: 30
     environment:
@@ -88,8 +88,8 @@ workflows:
           set -euo pipefail
           flutter build apk --debug
           test -f build/app/outputs/flutter-apk/app-debug.apk
-          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.2.apk
+          cp build/app/outputs/flutter-apk/app-debug.apk             build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.3.apk
 
     artifacts:
-      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.2.apk
+      - build/app/outputs/flutter-apk/Mi-Agenda-IA-0.4.3.apk
       - build/app/outputs/flutter-apk/app-debug.apk
